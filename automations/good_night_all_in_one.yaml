@@ -1,5 +1,5 @@
 blueprint:
-  name: "GoodNight"
+  name: "✨ Binarial App: Todo en Uno - Buenas Noches (V2 PRO)"
   description: >
     Versión Avanzada: Permite combinar todo tipo de disparadores libres (pulsaciones, tele apagada, horarios...)
     Se encarga del apagado general y gestiona las luces del pasillo. 
@@ -50,11 +50,10 @@ blueprint:
     motion_sensor:
       name: "👁️ Sensor de Presencia (Opcional)"
       description: "Solo hace falta si has marcado la casilla anterior."
-      default: ""
+      default: []
       selector:
         entity:
           domain: binary_sensor
-          # device_class: motion  # Omitido para que sirva con cualquier sensor
           
     delay_time:
       name: "⏱️ Tiempo de Apagado"
@@ -68,9 +67,10 @@ blueprint:
 
 mode: restart
 
-# Variables para usar los booleanos del input de manera segura
+# Variables para usar los booleanos del input de manera segura en templates
 variables:
   use_motion_sensor: !input use_motion_sensor
+  sensor_ent: !input motion_sensor
 
 # CEREBRO: Cuándo se ejecuta
 trigger: !input custom_triggers
@@ -102,9 +102,8 @@ action:
         sequence:
           # Esperamos a que deje de detectar movimiento por X los segundos especificados
           - wait_for_trigger:
-              - platform: state
-                entity_id: !input motion_sensor
-                to: "off"
+              - platform: template
+                value_template: "{{ is_state(sensor_ent, 'off') }}"
                 for:
                   seconds: !input delay_time
             timeout:
