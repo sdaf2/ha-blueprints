@@ -1,0 +1,60 @@
+blueprint:
+  name: "Secuencia de Buenas Noches (Personalizable)"
+  description: >
+    Apaga todas las luces y dispositivos de las áreas que selecciones (como el Salón o Exterior).
+    A continuación, enciende luces para formar un recorrido seguro hacia la cama, 
+    espera un tiempo determinado y luego apaga ese recorrido.
+  domain: script
+  input:
+    areas_to_turn_off:
+      name: "¿Qué áreas o luces quieres apagar?"
+      description: "Selecciona las áreas completas, dispositivos o luces individuales que deben apagarse general."
+      selector:
+        target: {}
+    path_lights:
+      name: "Luces de recorrido seguro"
+      description: "Selecciona las luces (ej. pasillo, entrada habitación) que quieres que se queden encendidas unos minutos."
+      selector:
+        target:
+          entity:
+            - domain: light
+    path_brightness:
+      name: "Brillo del recorrido (%)"
+      description: "Nivel de brillo para las luces de paso (para no deslumbrar)."
+      default: 30
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+    delay_time:
+      name: "Tiempo de encendido (en segundos)"
+      description: "Durante cuántos segundos deben quedarse las luces de pasaje encendidas."
+      default: 120
+      selector:
+        number:
+          min: 10
+          max: 1800 # (30 minutos máximo en el selector)
+          unit_of_measurement: "segundos"
+
+mode: restart
+icon: mdi:bed
+
+sequence:
+  # 1. Apagar lo seleccionado como zona general
+  - service: homeassistant.turn_off
+    target: !input areas_to_turn_off
+
+  # 2. Encender luces del recorrido seguro
+  - service: light.turn_on
+    target: !input path_lights
+    data:
+      brightness_pct: !input path_brightness
+
+  # 3. Esperar el tiempo indicado
+  - delay:
+      seconds: !input delay_time
+
+  # 4. Apagar recorrido
+  - service: light.turn_off
+    target: !input path_lights
