@@ -1,30 +1,43 @@
 blueprint:
-  name: "GoodNight"
+  name: "GoodNight Pro"
   description: >
-    Versión Avanzada: Permite combinar todo tipo de disparadores libres (pulsaciones, tele apagada, horarios...)
-    Se encarga del apagado general y gestiona las luces del pasillo. 
-    Las luces se apagarán por tiempo Opcionalmente pueden esperar a que un sensor de presencia no detecte a nadie durante ese tiempo.
+    Versión Avanzada: Apagado general de la casa y luces pasarela temporizadas.
+    Permite configurar restricciones (ej: Solo de noche) y distintos métodos de apagado (por un tiempo fijo, por sensor de presencia o dejarlas encendidas).
   domain: automation
   input:
-    # 1. TRIGGERS LIBRES
+    # 1. TRIGGERS Y CONDICIONES
     custom_triggers:
       name: "⚡ ¿Qué activa esto? (Disparadores libres)"
-      description: "Añade todas las combinaciones que quieras: Estado de TV, Botones, Horarios... ¡Lo que sea!"
+      description: "Ejemplos: Cuando la TV se apaga, cuando presionas un botón..."
       default: []
       selector:
         trigger: {}
         
+    only_at_night:
+      name: "🌙 Restricción: Activar SOLO de noche"
+      description: "Si activas esto, se usa el Sol de restricción. Si lo desmarcas, funcionará a cualquier hora."
+      default: false
+      selector:
+        boolean: {}
+        
+    custom_conditions:
+      name: "🛡️ Condiciones Extra (Opcional)"
+      description: "Si además quieres poner más reglas manuales (estar en casa, etc), añádelas aquí."
+      default: []
+      selector:
+        condition: {}
+        
     # 2. ACCIONES "APAGAR TODO"
     areas_to_turn_off:
       name: "🏠 Zonas o Luces a Apagar (Apagado General)"
-      description: "Todo lo que selecciones aquí se apagará inmediatamente."
+      description: "Todo lo seleccionado aquí se apagará de golpe."
       selector:
         target: {}
         
     # 3. ACCIONES "RECORRIDO"
     path_lights:
       name: "💡 Luces del Recorrido Seguro"
-      description: "Luces del pasillo o habitación para iluminarte el camino."
+      description: "Luces que se encienden para ver el camino a la cama."
       selector:
         target:
           entity:
@@ -40,84 +53,98 @@ blueprint:
           unit_of_measurement: "%"
           
     # 4. LÓGICA DE APAGADO
+    use_fixed_delay:
+      name: "⏳ Apagar por Temporizador Fijo"
+      description: "Actívalo para que el pasillo se apague solo después de un tiempo concreto."
+      default: true
+      selector:
+        boolean: {}
+    fixed_delay_time:
+      name: "↳ ⏱️ Temporizador Fijo (Segundos)"
+      default: 120
+      selector:
+        number:
+          min: 1
+          max: 3600
+          unit_of_measurement: "segundos"
+
     use_motion_sensor:
-      name: "🏃‍♂️ Usar Sensor de Presencia Inteligente"
-      description: "Activa esto si prefieres que las luces no se apaguen de golpe, sino que esperen a que no haya movimiento en el pasillo."
+      name: "🏃‍♂️ Apagar por Sensor de Presencia (Anula el fijo)"
+      description: "Si lo activas, mandará sobre el tiempo fijo. Las luces solo se apagarán cuando no detecten movimiento."
       default: false
       selector:
         boolean: {}
-
     motion_sensor:
-      name: "👁️ Sensor de Presencia (Opcional)"
-      description: "Solo hace falta si has marcado la casilla anterior."
+      name: "↳ 👁️ Sensor de Presencia"
       default: []
       selector:
         entity:
           domain: binary_sensor
           
-    delay_time:
-      name: "⏱️ Tiempo de Apagado"
-      description: "Si no usas sensor: Segundos que durarán encendidas. Si usas sensor: Segundos sin movimiento necesarios para apagarlas."
-      default: 120
+    motion_delay_time:
+      name: "↳ ⏱️ Temporizador del Sensor (Segundos sin movimiento)"
+      default: 60
       selector:
         number:
-          min: 10
-          max: 1800
+          min: 1
+          max: 3600
           unit_of_measurement: "segundos"
 
 mode: restart
 
-# Variables para usar los booleanos del input de manera segura en templates
+# VARIABLES
 variables:
+  solo_noche: !input only_at_night
   use_motion_sensor: !input use_motion_sensor
   sensor_ent: !input motion_sensor
+  use_fixed_delay: !input use_fixed_delay
 
-# CEREBRO: Cuándo se ejecuta
+# CEREBRO
 trigger: !input custom_triggers
 
-# CONDICION: Solo lo ejecutamos de noche de manera automática
+# CONDICIONES
 condition:
-  - condition: state
-    entity_id: sun.sun
-    state: "below_horizon"
+  - condition: or
+    conditions:
+      - condition: template
+        value_template: "{{ solo_noche == false }}"
+      - condition: state
+        entity_id: sun.sun
+        state: "below_horizon"
+  - condition: and
+    conditions: !input custom_conditions
 
-# MUSCULO: Qué tiene que hacer (La Secuencia)
+# MÚSCULO
 action:
-  # 1. Apagado general de las zonas
   - service: homeassistant.turn_off
     target: !input areas_to_turn_off
 
-  # 2. Encendido tenue del recorrido a la cama
   - service: light.turn_on
     target: !input path_lights
     data:
       brightness_pct: !input path_brightness
 
-  # 3. Lógica de retardo (Con o sin sensor)
   - choose:
-      # OPCIÓN A: Con Sensor de Movimiento
       - conditions:
           - condition: template
             value_template: "{{ use_motion_sensor == true }}"
         sequence:
-          # Esperamos a que deje de detectar movimiento por X los segundos especificados
           - wait_for_trigger:
               - platform: template
                 value_template: "{{ is_state(sensor_ent, 'off') }}"
                 for:
-                  seconds: !input delay_time
+                  seconds: !input motion_delay_time
             timeout:
-              minutes: 60 # Tiempo máximo de seguridad (por si el sensor falla, apaga en 1h máximo)
+              minutes: 120
             continue_on_timeout: true
+          - service: light.turn_off
+            target: !input path_lights
 
-      # OPCIÓN B: Tiempo Fijo Básico (Modo clásico)
       - conditions:
           - condition: template
-            value_template: "{{ use_motion_sensor == false }}"
+            value_template: "{{ use_fixed_delay == true }}"
         sequence:
           - delay:
-              seconds: !input delay_time
-              
-  # 4. Apagar por completo la pasarela
-  - service: light.turn_off
-    target: !input path_lights
+              seconds: !input fixed_delay_time
+          - service: light.turn_off
+            target: !input path_lights
