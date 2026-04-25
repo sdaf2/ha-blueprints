@@ -1,5 +1,5 @@
 blueprint:
-  name: "✨ Binarial App: Todo en Uno - Buenas Noches (V2 PRO)"
+  name: "GoodNight"
   description: >
     Versión Avanzada: Permite combinar todo tipo de disparadores libres (pulsaciones, tele apagada, horarios...)
     Se encarga del apagado general y gestiona las luces del pasillo. 
