@@ -1,0 +1,89 @@
+blueprint:
+  name: "✨ Binarial App: Todo en Uno - Buenas Noches"
+  description: >
+    La aplicación definitiva para el apagado general. Selecciona QUÉ lo dispara (ej: al apagar la tele o pulsar un botón), 
+    y automatizará el apagado del salón, encenderá el pasillo hacia tu habitación de forma tenue, y lo apagará después.
+  domain: automation
+  input:
+    # 1. TRIGGERS (Desencadenantes)
+    trigger_entity:
+      name: "🔌 Dispositivo Disparador"
+      description: "Selecciona el dispositivo que va a detonar la acción (ej. la Smart TV, un botón físico o un sensor)."
+      selector:
+        entity: {}
+    trigger_state:
+      name: "⚡ Estado necesario para disparar"
+      description: "Si has elegido la tele, escribe 'off'. Si es un botón, puede ser 'on' o 'single'. Depende de tu dispositivo."
+      default: "off"
+      selector:
+        text: {}
+        
+    # 2. ACTIONS (Secuencia)
+    areas_to_turn_off:
+      name: "🏠 Zonas o Luces a Apagar (Apagado General)"
+      description: "Todo lo que selecciones aquí se apagará inmediatamente."
+      selector:
+        target: {}
+        
+    path_lights:
+      name: "💡 Luces del Recorrido Seguro"
+      description: "Luces del pasillo o habitación que se encenderán temporalmente para iluminarte el camino."
+      selector:
+        target:
+          entity:
+            - domain: light
+            
+    path_brightness:
+      name: "🔅 Nivel de Brillo del Recorrido (%)"
+      description: "Se encenderán a este porcentaje para no deslumbrar en mitad de la noche."
+      default: 30
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+          
+    delay_time:
+      name: "⏱️ Tiempo de Seguridad"
+      description: "Segundos que las luces del pasillo estarán encendidas antes de apagarse por completo."
+      default: 120
+      selector:
+        number:
+          min: 10
+          max: 1800
+          unit_of_measurement: "segundos"
+
+mode: restart
+icon: mdi:weather-night
+
+# CEREBRO: Cuándo se ejecuta
+trigger:
+  - platform: state
+    entity_id: !input trigger_entity
+    to: !input trigger_state
+
+# CONDICION: Solo lo ejecutamos de noche de manera automática
+condition:
+  - condition: state
+    entity_id: sun.sun
+    state: "below_horizon"
+
+# MUSCULO: Qué tiene que hacer (La Secuencia)
+action:
+  # 1. Apagado general de las zonas
+  - service: homeassistant.turn_off
+    target: !input areas_to_turn_off
+
+  # 2. Encendido tenue del recorrido a la cama
+  - service: light.turn_on
+    target: !input path_lights
+    data:
+      brightness_pct: !input path_brightness
+
+  # 3. Esperar a que el usuario llegue a la cama
+  - delay:
+      seconds: !input delay_time
+
+  # 4. Apagar por completo la casa
+  - service: light.turn_off
+    target: !input path_lights
