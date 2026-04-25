@@ -1,5 +1,5 @@
 blueprint:
-  name: "✨ GoodNights"
+  name: "GoodNights"
   description: >
     La aplicación definitiva para el apagado general. Selecciona QUÉ lo dispara (ej: al apagar la tele o pulsar un botón), 
     y automatizará el apagado del salón, encenderá el pasillo hacia tu habitación de forma tenue, y lo apagará después.
@@ -54,7 +54,6 @@ blueprint:
           unit_of_measurement: "segundos"
 
 mode: restart
-icon: mdi:weather-night
 
 # CEREBRO: Cuándo se ejecuta
 trigger:
