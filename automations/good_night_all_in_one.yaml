@@ -121,3 +121,126 @@ action:
   # 4. Apagar por completo la pasarela
   - service: light.turn_off
     target: !input path_lights
+blueprint:
+  name: "GoodNight"
+  description: >
+    Versión Avanzada: Permite combinar todo tipo de disparadores libres (pulsaciones, tele apagada, horarios...)
+    Se encarga del apagado general y gestiona las luces del pasillo. 
+    Las luces se apagarán por tiempo Opcionalmente pueden esperar a que un sensor de presencia no detecte a nadie durante ese tiempo.
+  domain: automation
+  input:
+    # 1. TRIGGERS LIBRES
+    custom_triggers:
+      name: "⚡ ¿Qué activa esto? (Disparadores libres)"
+      description: "Añade todas las combinaciones que quieras: Estado de TV, Botones, Horarios... ¡Lo que sea!"
+      default: []
+      selector:
+        trigger: {}
+        
+    # 2. ACCIONES "APAGAR TODO"
+    areas_to_turn_off:
+      name: "🏠 Zonas o Luces a Apagar (Apagado General)"
+      description: "Todo lo que selecciones aquí se apagará inmediatamente."
+      selector:
+        target: {}
+        
+    # 3. ACCIONES "RECORRIDO"
+    path_lights:
+      name: "💡 Luces del Recorrido Seguro"
+      description: "Luces del pasillo o habitación para iluminarte el camino."
+      selector:
+        target:
+          entity:
+            - domain: light
+            
+    path_brightness:
+      name: "🔅 Brillo del Recorrido (%)"
+      default: 30
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+          
+    # 4. LÓGICA DE APAGADO
+    use_motion_sensor:
+      name: "🏃‍♂️ Usar Sensor de Presencia Inteligente"
+      description: "Activa esto si prefieres que las luces no se apaguen de golpe, sino que esperen a que no haya movimiento en el pasillo."
+      default: false
+      selector:
+        boolean: {}
+
+    motion_sensor:
+      name: "👁️ Sensor de Presencia (Opcional)"
+      description: "Solo hace falta si has marcado la casilla anterior."
+      default: []
+      selector:
+        entity:
+          domain: binary_sensor
+          
+    delay_time:
+      name: "⏱️ Tiempo de Apagado"
+      description: "Si no usas sensor: Segundos que durarán encendidas. Si usas sensor: Segundos sin movimiento necesarios para apagarlas."
+      default: 120
+      selector:
+        number:
+          min: 10
+          max: 1800
+          unit_of_measurement: "segundos"
+
+mode: restart
+
+# Variables para usar los booleanos del input de manera segura en templates
+variables:
+  use_motion_sensor: !input use_motion_sensor
+  sensor_ent: !input motion_sensor
+
+# CEREBRO: Cuándo se ejecuta
+trigger: !input custom_triggers
+
+# CONDICION: Solo lo ejecutamos de noche de manera automática
+condition:
+  - condition: state
+    entity_id: sun.sun
+    state: "below_horizon"
+
+# MUSCULO: Qué tiene que hacer (La Secuencia)
+action:
+  # 1. Apagado general de las zonas
+  - service: homeassistant.turn_off
+    target: !input areas_to_turn_off
+
+  # 2. Encendido tenue del recorrido a la cama
+  - service: light.turn_on
+    target: !input path_lights
+    data:
+      brightness_pct: !input path_brightness
+
+  # 3. Lógica de retardo (Con o sin sensor)
+  - choose:
+      # OPCIÓN A: Con Sensor de Movimiento
+      - conditions:
+          - condition: template
+            value_template: "{{ use_motion_sensor == true }}"
+        sequence:
+          # Esperamos a que deje de detectar movimiento por X los segundos especificados
+          - wait_for_trigger:
+              - platform: template
+                value_template: "{{ is_state(sensor_ent, 'off') }}"
+                for:
+                  seconds: !input delay_time
+            timeout:
+              minutes: 60 # Tiempo máximo de seguridad (por si el sensor falla, apaga en 1h máximo)
+            continue_on_timeout: true
+
+      # OPCIÓN B: Tiempo Fijo Básico (Modo clásico)
+      - conditions:
+          - condition: template
+            value_template: "{{ use_motion_sensor == false }}"
+        sequence:
+          - delay:
+              seconds: !input delay_time
+              
+  # 4. Apagar por completo la pasarela
+  - service: light.turn_off
+    target: !input path_lights
