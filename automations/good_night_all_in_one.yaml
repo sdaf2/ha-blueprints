@@ -14,13 +14,6 @@ blueprint:
       selector:
         trigger: {}
         
-    custom_conditions:
-      name: "🛡️ Condiciones (Opcional)"
-      description: "Ejemplo: Funcionar SOLO si es de noche (Sol por debajo del horizonte). Si lo dejas vacío, se ejecutará siempre que se dispare."
-      default: []
-      selector:
-        condition: {}
-        
     # 2. ACCIONES "APAGAR TODO"
     areas_to_turn_off:
       name: "🏠 Zonas o Luces a Apagar (Apagado General)"
@@ -82,8 +75,11 @@ variables:
 # CEREBRO: Cuándo se ejecuta
 trigger: !input custom_triggers
 
-# CONDICION: Se evaluarán las condiciones que añadas (si las hay)
-condition: !input custom_conditions
+# CONDICION: Solo lo ejecutamos de noche de manera automática
+condition:
+  - condition: state
+    entity_id: sun.sun
+    state: "below_horizon"
 
 # MUSCULO: Qué tiene que hacer (La Secuencia)
 action:
