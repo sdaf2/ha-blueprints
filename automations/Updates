@@ -1,0 +1,49 @@
+blueprint:
+  name: "Auto Actualización de Home Assistant"
+  description: >
+    Automatiza las actualizaciones de tus componentes de Home Assistant (Core, OS, Add-ons) 
+    a la hora que elijas, con opción de realizar una copia de seguridad antes de instalar.
+  domain: automation
+  input:
+    update_time:
+      name: Hora de ejecución
+      description: Hora en la que se buscarán e instalarán las actualizaciones disponibles.
+      default: "04:00:00"
+      selector:
+        time: {}
+    update_entities:
+      name: Entidades de actualización
+      description: "Selecciona una o más entidades de actualización (Core, Add-ons, Operating System, etc.)."
+      selector:
+        entity:
+          domain: update
+          multiple: true
+    enable_backup:
+      name: Crear copia de seguridad antes de actualizar
+      description: Si está activado, creará una copia de seguridad antes de instalar el componente seleccionado.
+      default: true
+      selector:
+        boolean: {}
+
+mode: queued
+max: 10
+
+trigger:
+  - platform: time
+    at: !input update_time
+
+condition: []
+
+action:
+  - repeat:
+      for_each: !input update_entities
+      sequence:
+        - if:
+            - condition: template
+              value_template: "{{ is_state(repeat.item, 'on') }}"
+          then:
+            - action: update.install
+              target:
+                entity_id: "{{ repeat.item }}"
+              data:
+                backup: !input enable_backup
