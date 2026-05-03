@@ -1,5 +1,5 @@
 blueprint:
-  name: "Auto Actualización Avanzada de Home Assistant"
+  name: "Auto Update"
   description: >
     Automatiza las actualizaciones de tus aplicaciones (Add-ons), Supervisor, Core y Operating System
     de forma segura y secuencial a las 04:00 AM, cada 5 minutos o de forma instantánea al detectarse.
