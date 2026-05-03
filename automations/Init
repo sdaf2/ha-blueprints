@@ -25,7 +25,9 @@ action:
   # INSTANCIA 1: Add-ons y aplicaciones del Supervisor
   - repeat:
       for_each:
+        - "openthread_border_router"
         - "core_openthread"
+        - "core_openthread_border_router"
         - "core_mosquitto"
         - "core_configurator"
         - "core_ssh"
@@ -51,7 +53,6 @@ action:
       entity_id: zone.home
 
   # PASO 5: Notificaciones del Auto-Arranque
-  # Se envía tanto una notificación persistente como a tus dispositivos móviles
   - action: persistent_notification.create
     data:
       title: "Auto Arranque ejecutado"
