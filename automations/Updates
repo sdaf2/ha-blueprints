@@ -1,53 +1,104 @@
-alias: "Auto Actualizar Componentes de Home Assistant"
-description: "Comprueba e instala todas las actualizaciones disponibles (Add-ons, Supervisor, Core, OS) de forma secuencial y segura a las 04:00 AM, cada 5 minutos o de forma instantánea al detectarse."
+blueprint:
+  name: "Auto Actualización Avanzada de Home Assistant"
+  description: >
+    Automatiza las actualizaciones de tus aplicaciones (Add-ons), Supervisor, Core y Operating System
+    de forma segura y secuencial a las 04:00 AM, cada 5 minutos o de forma instantánea al detectarse.
+  domain: automation
+  input:
+    update_time:
+      name: "Hora de ejecución programada"
+      description: "Hora en la que se buscarán e instalarán las actualizaciones todos los días."
+      default: "04:00:00"
+      selector:
+        time: {}
+    enable_addons:
+      name: "Actualizar Add-ons y Aplicaciones"
+      description: "Habilita la actualización automática de todos tus Add-ons instalados (ej. File Editor, Zigbee2MQTT)."
+      default: true
+      selector:
+        boolean: {}
+    enable_supervisor:
+      name: "Actualizar Supervisor"
+      description: "Habilita la actualización automática del Supervisor de Home Assistant."
+      default: true
+      selector:
+        boolean: {}
+    enable_core:
+      name: "Actualizar Home Assistant Core"
+      description: "Habilita la actualización automática de Home Assistant Core."
+      default: true
+      selector:
+        boolean: {}
+    enable_os:
+      name: "Actualizar Operating System"
+      description: "Habilita la actualización automática de Home Assistant Operating System."
+      default: true
+      selector:
+        boolean: {}
+    enable_backup:
+      name: "Crear copia de seguridad antes de actualizar"
+      description: "Recomendado para evitar pérdidas de datos en caso de fallo."
+      default: true
+      selector:
+        boolean: {}
+
+variables:
+  enable_addons_var: !input enable_addons
+  enable_supervisor_var: !input enable_supervisor
+  enable_core_var: !input enable_core
+  enable_os_var: !input enable_os
+  enable_backup_var: !input enable_backup
+
 mode: queued
 max: 10
 
-# 1. ¿CUÁNDO SUCEDE? (Triggers / Disparadores)
 trigger:
-  # Disparador 1: A las 04:00 AM todos los días (Por seguridad)
+  # Disparador 1: A la hora fijada
   - platform: time
-    at: "04:00:00"
+    at: !input update_time
     id: "hora_fijada"
 
-  # Disparador 2: En cuanto Home Assistant detecte que hay cualquier actualización disponible
+  # Disparador 2: Al detectarse cualquier nueva actualización
   - platform: template
     value_template: "{{ states.update | selectattr('state', 'eq', 'on') | list | count > 0 }}"
     id: "nueva_actualizacion"
 
-  # Disparador 3: Comprobación periódica cada 5 minutos
+  # Disparador 3: Cada 5 minutos
   - platform: time_pattern
     minutes: "/5"
     id: "cada_5_minutos"
 
-# 2. ¿SE CUMPLEN LAS CONDICIONES? (Conditions)
-condition: [] # No hay condiciones globales. Se evalúa cada paso.
+condition: []
 
-# 3. ¿QUÉ HACEMOS? (Acciones / Actions)
-# Las acciones están ordenadas por prioridad para evitar que un reinicio interrumpa otras instalaciones.
 action:
   # PASO 1: Actualizar todos los Add-ons primero (no reinician todo el sistema)
-  - repeat:
-      for_each: >
-        {{ states.update 
-           | selectattr('state', 'eq', 'on') 
-           | rejectattr('entity_id', 'in', [
-               'update.home_assistant_core_update', 
-               'update.home_assistant_operating_system_update', 
-               'update.home_assistant_supervisor_update'
-             ]) 
-           | map(attribute='entity_id') | list }}
-      sequence:
-        - action: update.install
-          target:
-            entity_id: "{{ repeat.item }}"
-          data:
-            backup: true
-        # Pequeña pausa para permitir que el add-on se instale
-        - delay: "00:00:30"
+  - if:
+      - condition: template
+        value_template: "{{ enable_addons_var }}"
+    then:
+      - repeat:
+          for_each: >
+            {{ states.update 
+               | selectattr('state', 'eq', 'on') 
+               | rejectattr('entity_id', 'in', [
+                   'update.home_assistant_core_update', 
+                   'update.home_assistant_operating_system_update', 
+                   'update.home_assistant_supervisor_update'
+                 ]) 
+               | map(attribute='entity_id') | list }}
+          sequence:
+            - action: update.install
+              target:
+                entity_id: "{{ repeat.item }}"
+              data:
+                backup: "{{ enable_backup_var }}"
+            # Pequeña pausa para permitir que el add-on se instale
+            - delay: "00:00:30"
 
   # PASO 2: Actualizar el Supervisor de Home Assistant (si está disponible)
   - if:
+      - condition: template
+        value_template: "{{ enable_supervisor_var }}"
       - condition: state
         entity_id: update.home_assistant_supervisor_update
         state: "on"
@@ -56,11 +107,13 @@ action:
         target:
           entity_id: update.home_assistant_supervisor_update
         data:
-          backup: true
+          backup: "{{ enable_backup_var }}"
       - delay: "00:01:00"
 
   # PASO 3: Actualizar Home Assistant Core (provoca reinicio del contenedor)
   - if:
+      - condition: template
+        value_template: "{{ enable_core_var }}"
       - condition: state
         entity_id: update.home_assistant_core_update
         state: "on"
@@ -69,11 +122,13 @@ action:
         target:
           entity_id: update.home_assistant_core_update
         data:
-          backup: true
+          backup: "{{ enable_backup_var }}"
       - delay: "00:01:00"
 
   # PASO 4: Actualizar Home Assistant Operating System (provoca reinicio del host)
   - if:
+      - condition: template
+        value_template: "{{ enable_os_var }}"
       - condition: state
         entity_id: update.home_assistant_operating_system_update
         state: "on"
@@ -82,4 +137,4 @@ action:
         target:
           entity_id: update.home_assistant_operating_system_update
         data:
-          backup: true
+          backup: "{{ enable_backup_var }}"
