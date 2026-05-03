@@ -1,49 +1,35 @@
-blueprint:
-  name: "Auto Actualización de Home Assistant"
-  description: >
-    Automatiza las actualizaciones de tus componentes de Home Assistant (Core, OS, Add-ons) 
-    a la hora que elijas, con opción de realizar una copia de seguridad antes de instalar.
-  domain: automation
-  input:
-    update_time:
-      name: Hora de ejecución
-      description: Hora en la que se buscarán e instalarán las actualizaciones disponibles.
-      default: "04:00:00"
-      selector:
-        time: {}
-    update_entities:
-      name: Entidades de actualización
-      description: "Selecciona una o más entidades de actualización (Core, Add-ons, Operating System, etc.)."
-      selector:
-        entity:
-          domain: update
-          multiple: true
-    enable_backup:
-      name: Crear copia de seguridad antes de actualizar
-      description: Si está activado, creará una copia de seguridad antes de instalar el componente seleccionado.
-      default: true
-      selector:
-        boolean: {}
-
+alias: "Auto Actualizar Componentes de Home Assistant"
+description: "Comprueba e instala todas las actualizaciones disponibles (Core, OS, Add-ons) a las 04:00 AM, cada 5 minutos o de forma instantánea al detectarse."
 mode: queued
 max: 10
 
+# 1. ¿CUÁNDO SUCEDE? (Triggers)
 trigger:
+  # Disparador 1: A las 04:00 AM todos los días
   - platform: time
-    at: !input update_time
+    at: "04:00:00"
 
+  # Disparador 2: En cuanto Home Assistant detecte que hay una actualización disponible (estado 'on')
+  - platform: template
+    value_template: "{{ states.update | selectattr('state', 'eq', 'on') | list | count > 0 }}"
+    id: "nueva_actualizacion"
+
+  # Disparador 3: Comprobación periódica cada 5 minutos
+  - platform: time_pattern
+    minutes: "/5"
+    id: "cada_5_minutos"
+
+# 2. ¿SE CUMPLEN LAS CONDICIONES? (Conditions)
 condition: []
 
+# 3. ¿QUÉ HACEMOS? (Acciones / Actions)
 action:
+  # Repetir para cada entidad de actualización que esté en 'on'
   - repeat:
-      for_each: !input update_entities
+      for_each: "{{ states.update | selectattr('state', 'eq', 'on') | map(attribute='entity_id') | list }}"
       sequence:
-        - if:
-            - condition: template
-              value_template: "{{ is_state(repeat.item, 'on') }}"
-          then:
-            - action: update.install
-              target:
-                entity_id: "{{ repeat.item }}"
-              data:
-                backup: !input enable_backup
+        - action: update.install
+          target:
+            entity_id: "{{ repeat.item }}"
+          data:
+            backup: true
