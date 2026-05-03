@@ -16,7 +16,7 @@ trigger:
 
   # Disparador 2: Cada 5 minutos periódicamente
   - platform: time_pattern
-    minutes: "/5"
+    minutes: "/1"
     id: "cada_5_minutos"
 
 condition: []
@@ -38,27 +38,3 @@ action:
         - action: hassio.addon_start
           data:
             addon: "{{ repeat.item }}"
-
-  # INSTANCIA 2: Supervisor de Home Assistant
-  - action: hassio.supervisor_restart
-
-  # INSTANCIA 3: Observer de Home Assistant
-  - action: hassio.addon_restart
-    data:
-      addon: "core_observer"
-
-  # INSTANCIA 4: Home Assistant Core y Operating System
-  - action: homeassistant.update_entity
-    target:
-      entity_id: zone.home
-
-  # PASO 5: Notificaciones del Auto-Arranque
-  - action: persistent_notification.create
-    data:
-      title: "Auto Arranque ejecutado"
-      message: "Se han comprobado y arrancado las 4 instancias de Home Assistant."
-
-  - action: notify.notify
-    data:
-      title: "Auto Arranque ejecutado"
-      message: "Se han comprobado y arrancado las 4 instancias de Home Assistant."
