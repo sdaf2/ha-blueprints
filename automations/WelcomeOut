@@ -1,0 +1,139 @@
+blueprint:
+  name: "WelcomeExt"
+  description: >
+    Enciende las luces exteriores cuando los miembros autorizados llegan a casa.
+    Permite restringir el encendido a la noche y configurar el apagado por temporizador, por hora fija, o ambos (el que ocurra primero).
+  domain: automation
+  input:
+    # ----------------------------------
+    # 1. DISPARADORES Y MIEMBROS
+    # ----------------------------------
+    authorized_people:
+      name: "👥 Miembros Autorizados"
+      description: "Selecciona las personas cuya llegada activará las luces."
+      selector:
+        entity:
+          domain: person
+          multiple: true
+
+    # ----------------------------------
+    # 2. DISPOSITIVOS
+    # ----------------------------------
+    target_lights:
+      name: "💡 Luces de Exterior"
+      description: "Las luces o zonas que quieres que se enciendan."
+      selector:
+        target:
+          entity:
+            - domain: light
+            - domain: switch
+
+    # ----------------------------------
+    # 3. CONDICIÓN NOCTURNA
+    # ----------------------------------
+    only_at_night:
+      name: "🌙 Activar solo de noche"
+      description: "Si está activo, las luces solo se encenderán si el sol se ha puesto."
+      default: true
+      selector:
+        boolean: {}
+
+    # ----------------------------------
+    # 4. OPCIONES DE APAGADO
+    # ----------------------------------
+    use_timer:
+      name: "⏳ Usar Temporizador de Apagado"
+      description: "Las luces se apagarán tras un tiempo determinado desde el encendido."
+      default: true
+      selector:
+        boolean: {}
+    
+    timer_duration:
+      name: "↳ ⏱️ Tiempo de espera"
+      description: "Tiempo que las luces permanecerán encendidas (en minutos)."
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 60
+          unit_of_measurement: "minutos"
+
+    use_fixed_time:
+      name: "⏰ Usar Hora Fija de Apagado"
+      description: "Las luces se apagarán a una hora concreta (ej: a las 00:00)."
+      default: false
+      selector:
+        boolean: {}
+
+    fixed_off_time:
+      name: "↳ 🕒 Hora de apagado"
+      default: "00:00:00"
+      selector:
+        time: {}
+
+mode: restart
+
+# VARIABLES INTERNAS
+variables:
+  solo_noche: !input only_at_night
+  usa_timer: !input use_timer
+  minutos_timer: !input timer_duration
+  usa_hora_fija: !input use_fixed_time
+  target_ent: !input target_lights
+
+trigger:
+  - platform: state
+    entity_id: !input authorized_people
+    to: "home"
+
+condition:
+  # Condición de noche (si está activa)
+  - condition: or
+    conditions:
+      - condition: template
+        value_template: "{{ solo_noche == false }}"
+      - condition: state
+        entity_id: sun.sun
+        state: "below_horizon"
+
+action:
+  # 1. Encendemos las luces
+  - service: homeassistant.turn_on
+    target: !input target_lights
+
+  # 2. Lógica de espera para el apagado
+  - choose:
+      # CASO A: Ambos activos (espera el primero que ocurra)
+      - conditions:
+          - condition: template
+            value_template: "{{ usa_timer and usa_hora_fija }}"
+        sequence:
+          - wait_for_trigger:
+              - platform: time
+                at: !input fixed_off_time
+            timeout:
+              minutes: "{{ minutos_timer }}"
+            continue_on_timeout: true
+
+      # CASO B: Solo Temporizador
+      - conditions:
+          - condition: template
+            value_template: "{{ usa_timer and not usa_hora_fija }}"
+        sequence:
+          - delay:
+              minutes: "{{ minutos_timer }}"
+
+      # CASO C: Solo Hora Fija
+      - conditions:
+          - condition: template
+            value_template: "{{ not usa_timer and usa_hora_fija }}"
+        sequence:
+          - wait_for_trigger:
+              - platform: time
+                at: !input fixed_off_time
+
+  # 3. Apagamos las luces (si se cumplió alguna condición de espera)
+  - condition: template
+    value_template: "{{ usa_timer or usa_hora_fija }}"
+  - service: homeassistant.turn_off
+    target: !input target_lights
