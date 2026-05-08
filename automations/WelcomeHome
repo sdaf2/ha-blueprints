@@ -2,7 +2,6 @@ blueprint:
   name: "Welcome Home"
   description: >
     Enciende luces al llegar a casa (GPS) o por presencia.
-    Permite definir qué luces se apagarán solas y cuáles quedarán encendidas permanentemente.
   domain: automation
   input:
     authorized_people:
@@ -23,7 +22,7 @@ blueprint:
     target_lights_auto:
       name: "💡 Luces con Auto-Apagado"
       description: "Luces que seguirán la lógica de temporizadores."
-      default: {}
+      default: 
       selector:
         target:
           entity:
@@ -33,7 +32,7 @@ blueprint:
     target_lights_permanent:
       name: "🔦 Luces Permanentes"
       description: "Luces que NO se apagarán automáticamente."
-      default: {}
+      default: 
       selector:
         target:
           entity:
@@ -92,13 +91,8 @@ blueprint:
 mode: restart
 
 variables:
-  v_solo_noche: !input only_at_night
-  v_lux_sensor: !input illuminance_sensor
-  v_lux_threshold: !input illuminance_threshold
-  v_motion_sensor: !input motion_sensor
-  v_on_delay: !input on_delay
-  v_arrival_min: !input arrival_duration
-  v_off_sec: !input off_delay
+  # Capturamos los inputs en variables
+  v_motion: !input motion_sensor
   v_lights_auto: !input target_lights_auto
   v_lights_perm: !input target_lights_permanent
 
@@ -119,16 +113,11 @@ condition:
       - condition: or
         conditions:
           - condition: template
-            value_template: "{{ v_solo_noche == false }}"
-          - condition: state
-            entity_id: sun.sun
-            state: "below_horizon"
+            value_template: "{{ !input only_at_night == false or is_state('sun.sun', 'below_horizon') }}"
       - condition: or
         conditions:
           - condition: template
-            value_template: "{{ v_lux_sensor == [] }}"
-          - condition: template
-            value_template: "{{ states(v_lux_sensor) | float(0) <= (v_lux_threshold | float) }}"
+            value_template: "{{ !input illuminance_sensor == [] or states(!input illuminance_sensor) | float(0) <= (!input illuminance_threshold | float) }}"
 
 action:
   - choose:
@@ -137,7 +126,7 @@ action:
             id: "movimiento"
         sequence:
           - delay:
-              seconds: "{{ v_on_delay }}"
+              seconds: !input on_delay
           - condition: state
             entity_id: !input motion_sensor
             state: "on"
@@ -160,9 +149,9 @@ action:
         from: "on"
         to: "off"
         for:
-          seconds: "{{ v_off_sec }}"
+          seconds: !input off_delay
     timeout:
-      minutes: "{{ v_arrival_min }}"
+      minutes: !input arrival_duration
     continue_on_timeout: true
 
   - service: homeassistant.turn_off
