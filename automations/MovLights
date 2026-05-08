@@ -1,5 +1,5 @@
 blueprint:
-  name: "MovLights"
+  name: "Mov Lights"
   description: >
     Control inteligente de luces interiores mediante sensor de movimiento.
     Incluye temporizadores de inicio y apagado, sensores de luminosidad y restricciones horarias.
@@ -12,7 +12,7 @@ blueprint:
       selector:
         entity:
           domain: binary_sensor
-          device_class: motion
+
 
     target_lights:
       name: "💡 Luces a controlar"
@@ -120,15 +120,14 @@ trigger:
 condition:
   # 1. Comprobar si hay bloqueo activo
   - condition: template
-    value_template: "{{ v_blocking == [] or states(v_blocking) != 'on' }}"
+    value_template: "{{ v_blocking in [none, [], ''] or not is_state(v_blocking, 'on') }}"
+
 
   # 2. Comprobar Luminosidad (si aplica)
-  - condition: or
-    conditions:
-      - condition: template
-        value_template: "{{ v_use_lux == false }}"
-      - condition: template
-        value_template: "{{ states(v_lux_sensor) | float(0) <= (v_lux_threshold | float) }}"
+  - condition: template
+    value_template: "{{ v_use_lux == false or v_lux_sensor in [none, [], ''] or states(v_lux_sensor) | float(0) <= (v_lux_threshold | float) }}"
+
+
 
   # 3. Comprobar Rango Horario (si aplica)
   - condition: or
@@ -144,10 +143,16 @@ action:
   - delay:
       seconds: "{{ v_on_delay }}"
   
-  # 2. Verificar que sigue habiendo movimiento tras el delay (opcional, pero recomendado)
-  - condition: state
-    entity_id: !input motion_entity
-    state: "on"
+  # 2. (Opcional) Verificar movimiento (solo si hay delay de inicio)
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ v_on_delay | float > 0 }}"
+        sequence:
+          - condition: state
+            entity_id: !input motion_entity
+            state: "on"
+
 
   # 3. Encender luces
   - service: homeassistant.turn_on
@@ -157,8 +162,8 @@ action:
   - wait_for_trigger:
       - platform: state
         entity_id: !input motion_entity
-        from: "on"
         to: "off"
+
         for:
           seconds: !input off_delay
     timeout:
