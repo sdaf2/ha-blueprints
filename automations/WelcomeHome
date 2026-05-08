@@ -21,7 +21,8 @@ blueprint:
 
     target_lights_auto:
       name: "💡 Luces con Auto-Apagado"
-      default: {}
+      default:
+        entity_id: []
       selector:
         target:
           entity:
@@ -30,7 +31,8 @@ blueprint:
 
     target_lights_permanent:
       name: "🔦 Luces Permanentes"
-      default: {}
+      default:
+        entity_id: []
       selector:
         target:
           entity:
@@ -88,9 +90,6 @@ blueprint:
 
 mode: restart
 
-# ----------------------------------
-# VARIABLES PARA USO EN TEMPLATES
-# ----------------------------------
 variables:
   v_solo_noche: !input only_at_night
   v_lux_sensor: !input illuminance_sensor
@@ -116,26 +115,18 @@ trigger:
 condition:
   - condition: and
     conditions:
-      # Condición Nocturna
       - condition: or
         conditions:
           - condition: template
-            value_template: "{{ v_solo_noche == false }}"
-          - condition: state
-            entity_id: sun.sun
-            state: "below_horizon"
-      # Condición Luminosidad
+            value_template: "{{ v_solo_noche == false or is_state('sun.sun', 'below_horizon') }}"
       - condition: or
         conditions:
           - condition: template
-            value_template: "{{ v_lux_sensor == [] or v_lux_sensor == none }}"
-          - condition: template
-            value_template: "{{ states(v_lux_sensor) | float(0) <= (v_lux_threshold | float) }}"
+            value_template: "{{ v_lux_sensor == [] or states(v_lux_sensor) | float(0) <= (v_lux_threshold | float) }}"
 
 action:
   # 1. Encendido inicial
   - choose:
-      # Caso Movimiento
       - conditions:
           - condition: trigger
             id: "movimiento"
@@ -149,7 +140,6 @@ action:
             target: !input target_lights_auto
           - service: homeassistant.turn_on
             target: !input target_lights_permanent
-      # Caso Llegada
       - conditions:
           - condition: trigger
             id: "llegada"
@@ -159,7 +149,7 @@ action:
           - service: homeassistant.turn_on
             target: !input target_lights_permanent
 
-  # 2. Lógica de espera (Handoff)
+  # 2. Lógica de espera
   - wait_for_trigger:
       - platform: state
         entity_id: !input motion_sensor
@@ -171,6 +161,6 @@ action:
       minutes: "{{ v_arrival_min }}"
     continue_on_timeout: true
 
-  # 3. Apagado final (Solo luces auto)
+  # 3. Apagado final
   - service: homeassistant.turn_off
     target: !input target_lights_auto
