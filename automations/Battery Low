@@ -1,0 +1,48 @@
+blueprint:
+  name: "Battery Low"
+  description: >
+    Monitoriza una lista de dispositivos y envía una notificación cuando el nivel de batería 
+    cae por debajo del umbral definido.
+  domain: automation
+  input:
+    battery_entities:
+      name: "🔋 Dispositivos a monitorizar"
+      description: "Selecciona los sensores de batería que quieres vigilar."
+      selector:
+        entity:
+          domain: sensor
+          device_class: battery
+          multiple: true
+
+    threshold:
+      name: "📉 Umbral de Batería (%)"
+      description: "Recibirás la alerta cuando el nivel sea menor que este valor."
+      default: 20
+      selector:
+        number:
+          min: 1
+          max: 50
+          unit_of_measurement: "%"
+
+    notify_service:
+      name: "📲 Servicio de Notificación"
+      description: "Selecciona por dónde quieres recibir el aviso (ej: notify.mobile_app_tu_movil)."
+      selector:
+        action: {}
+
+mode: parallel
+max: 10
+
+trigger:
+  - platform: numeric_state
+    entity_id: !input battery_entities
+    below: !input threshold
+
+action:
+  - alias: "Enviar notificación"
+    choose: []
+    default:
+      - service: !input notify_service
+        data:
+          title: "⚠️ Batería Baja"
+          message: "El dispositivo {{ state_attr(trigger.entity_id, 'friendly_name') or trigger.entity_id }} está al {{ trigger.to_state.state }}%."
