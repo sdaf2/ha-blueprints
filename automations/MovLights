@@ -1,5 +1,5 @@
 blueprint:
-  name: "Movimiento Luces"
+  name: "MovLights"
   description: >
     Control inteligente de luces interiores mediante sensor de movimiento.
     Incluye temporizadores de inicio y apagado, sensores de luminosidad y restricciones horarias.
