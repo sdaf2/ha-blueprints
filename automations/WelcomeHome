@@ -50,12 +50,12 @@ blueprint:
         boolean: {}
 
     illuminance_sensor:
-      name: "☀️ Sensor de Luminosidad (Opcional)"
+      name: "☀️ Sensor de Luz / Estación AEMET"
+      description: "Selecciona un sensor de lux físico o un sensor de irradiancia de una estación meteorológica (ej: AEMET)."
       default: []
       selector:
         entity:
           domain: sensor
-          device_class: illuminance
 
     illuminance_threshold:
       name: "↳ Umbral de Lux"
