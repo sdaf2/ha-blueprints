@@ -1,5 +1,5 @@
 blueprint:
-  name: "Battery Low"
+  name: "Battery Alert"
   description: >
     Monitoriza una lista de dispositivos y envía una notificación cuando el nivel de batería 
     cae por debajo del umbral definido.
@@ -26,9 +26,10 @@ blueprint:
 
     notify_service:
       name: "📲 Servicio de Notificación"
-      description: "Selecciona por dónde quieres recibir el aviso (ej: notify.mobile_app_tu_movil)."
+      description: "Selecciona el servicio de notificación que quieres usar."
+      default: notify.persistent_notification
       selector:
-        action: {}
+        service: {}
 
 mode: parallel
 max: 10
@@ -39,10 +40,7 @@ trigger:
     below: !input threshold
 
 action:
-  - alias: "Enviar notificación"
-    choose: []
-    default:
-      - service: !input notify_service
-        data:
-          title: "⚠️ Batería Baja"
-          message: "El dispositivo {{ state_attr(trigger.entity_id, 'friendly_name') or trigger.entity_id }} está al {{ trigger.to_state.state }}%."
+  - service: !input notify_service
+    data:
+      title: "⚠️ Batería Baja"
+      message: "El dispositivo {{ state_attr(trigger.entity_id, 'friendly_name') or trigger.entity_id }} está al {{ trigger.to_state.state }}%."
