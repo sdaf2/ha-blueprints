@@ -5,7 +5,6 @@ blueprint:
     Permite definir qué luces se apagarán solas y cuáles quedarán encendidas permanentemente.
   domain: automation
   input:
-    # 1. DISPARADORES
     authorized_people:
       name: "👥 Miembros Autorizados"
       selector:
@@ -21,11 +20,10 @@ blueprint:
           domain: binary_sensor
           device_class: motion
 
-    # 2. DISPOSITIVOS (DIFERENCIADOS)
     target_lights_auto:
       name: "💡 Luces con Auto-Apagado"
-      description: "Luces que seguirán la lógica de temporizadores (cortesía/presencia)."
-      default: { "entities": [] }
+      description: "Luces que seguirán la lógica de temporizadores."
+      default: {}
       selector:
         target:
           entity:
@@ -34,15 +32,14 @@ blueprint:
 
     target_lights_permanent:
       name: "🔦 Luces Permanentes"
-      description: "Luces que se encenderán pero NO se apagarán automáticamente."
-      default: { "entities": [] }
+      description: "Luces que NO se apagarán automáticamente."
+      default: {}
       selector:
         target:
           entity:
             - domain: light
             - domain: switch
 
-    # 3. CONDICIONES
     only_at_night:
       name: "🌙 Activar solo de noche"
       default: true
@@ -51,7 +48,6 @@ blueprint:
 
     illuminance_sensor:
       name: "☀️ Sensor de Luz / Estación AEMET"
-      description: "Selecciona un sensor de lux físico o un sensor de irradiancia de una estación meteorológica (ej: AEMET)."
       default: []
       selector:
         entity:
@@ -66,7 +62,6 @@ blueprint:
           max: 1000
           unit_of_measurement: "lux"
 
-    # 4. TIEMPOS
     on_delay:
       name: "⏳ Retraso de Inicio (Movimiento)"
       default: 0
@@ -78,7 +73,6 @@ blueprint:
 
     arrival_duration:
       name: "⏱️ Tiempo de Cortesía (Llegada)"
-      description: "Minutos para apagar si no hay movimiento tras llegar."
       default: 5
       selector:
         number:
@@ -88,7 +82,6 @@ blueprint:
 
     off_delay:
       name: "⏱️ Temporizador de Salida (Presencia)"
-      description: "Segundos sin movimiento antes de apagar."
       default: 120
       selector:
         number:
@@ -138,7 +131,6 @@ condition:
             value_template: "{{ states(v_lux_sensor) | float(0) <= (v_lux_threshold | float) }}"
 
 action:
-  # 1. Encendido inicial
   - choose:
       - conditions:
           - condition: trigger
@@ -162,7 +154,6 @@ action:
           - service: homeassistant.turn_on
             target: !input target_lights_permanent
 
-  # 2. Lógica de apagado (SOLO PARA LUCES AUTO)
   - wait_for_trigger:
       - platform: state
         entity_id: !input motion_sensor
@@ -174,6 +165,5 @@ action:
       minutes: "{{ v_arrival_min }}"
     continue_on_timeout: true
 
-  # 3. Apagado final (SOLO PARA LUCES AUTO)
   - service: homeassistant.turn_off
     target: !input target_lights_auto
