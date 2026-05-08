@@ -1,5 +1,5 @@
 blueprint:
-  name: "Welcome Home + Presencia (Flexible)"
+  name: "Welcome Home"
   description: >
     Enciende luces al llegar a casa (GPS) o por presencia.
     Permite definir qué luces se apagarán solas y cuáles quedarán encendidas permanentemente.
