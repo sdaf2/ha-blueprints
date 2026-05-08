@@ -1,0 +1,35 @@
+blueprint:
+  name: "Sync Switch"
+  description: >
+    Permite usar varios pulsadores (binary sensors) para controlar una misma luz o grupo de luces.
+    Cada pulsación alterna el estado (on/off) de las luces seleccionadas.
+  domain: automation
+  input:
+    push_buttons:
+      name: "🔘 Pulsadores"
+      description: "Selecciona los pulsadores que controlarán la luz."
+      selector:
+        entity:
+          domain: binary_sensor
+          multiple: true
+
+    target_lights:
+      name: "💡 Luces"
+      description: "Luces o grupos que quieres controlar."
+      selector:
+        target:
+          entity:
+            - domain: light
+            - domain: switch
+
+mode: restart
+
+trigger:
+  - platform: state
+    entity_id: !input push_buttons
+    from: "off"
+    to: "on"
+
+action:
+  - service: homeassistant.toggle
+    target: !input target_lights
