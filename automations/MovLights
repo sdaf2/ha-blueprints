@@ -1,17 +1,20 @@
 blueprint:
-  name: "Interior: Luces por Movimiento (DEBUG MODE)"
+  name: "Mov Lights"
   description: >
-    Versión de depuración. Envía notificaciones persistentes y logs para ver dónde falla.
+    Control inteligente de luces interiores mediante sensor de movimiento o presencia.
+    Incluye temporizadores, sensores de luminosidad y restricciones horarias.
   domain: automation
   input:
     motion_entity:
-      name: "🏃 Sensor de Movimiento"
+      name: "🏃 Sensor de Movimiento / Presencia"
+      description: "El sensor que activará las luces."
       selector:
         entity:
           domain: binary_sensor
 
     target_lights:
       name: "💡 Luces a controlar"
+      description: "Luces, grupos o interruptores que quieres encender."
       selector:
         target:
           entity:
@@ -20,6 +23,7 @@ blueprint:
 
     on_delay:
       name: "⏳ Temporizador de Inicio"
+      description: "Tiempo que debe mantenerse el movimiento antes de encender (0 para instantáneo)."
       default: 0
       selector:
         number:
@@ -29,6 +33,7 @@ blueprint:
 
     off_delay:
       name: "⏱️ Temporizador de Apagado"
+      description: "Tiempo a esperar tras el último movimiento antes de apagar."
       default: 120
       selector:
         number:
@@ -38,6 +43,7 @@ blueprint:
 
     use_illuminance:
       name: "☀️ Usar Sensor de Luminosidad"
+      description: "Actívalo para que solo se encienda si hay poca luz."
       default: false
       selector:
         boolean: {}
@@ -52,6 +58,7 @@ blueprint:
 
     illuminance_threshold:
       name: "↳ 🔆 Umbral de Lux"
+      description: "Solo se encenderá si los lux están por debajo de este valor."
       default: 50
       selector:
         number:
@@ -61,6 +68,7 @@ blueprint:
 
     use_time_range:
       name: "⏰ Usar Rango Horario"
+      description: "Actívalo para que solo funcione entre ciertas horas."
       default: false
       selector:
         boolean: {}
@@ -79,6 +87,7 @@ blueprint:
 
     blocking_entity:
       name: "🚫 Entidad de Bloqueo (Opcional)"
+      description: "Si esta entidad está 'on', la automatización NO se ejecutará."
       default: []
       selector:
         entity: {}
@@ -100,115 +109,48 @@ trigger:
     entity_id: !input motion_entity
     to: "on"
 
-condition: [] # Sin condiciones para que SIEMPRE entre en action y podamos loguear
-
-action:
-  # 0. Notificación de inicio
-  - service: system_log.write
-    data:
-      message: "DEBUG: Sensor detectado!"
-      level: info
-  - service: persistent_notification.create
-    data:
-      title: "DEBUG: Movimiento"
-      message: "Sensor detectado. Empezando comprobaciones..."
-
+condition:
   # 1. Comprobar Bloqueo
-  - if:
-      - condition: or
-        conditions:
-          - condition: template
-            value_template: "{{ v_blocking in [none, [], ''] }}"
-          - condition: template
-            value_template: "{{ not is_state(v_blocking, 'on') }}"
-    then:
-      - service: system_log.write
-        data:
-          message: "DEBUG: Bloqueo OK (no activo)"
-          level: info
-    else:
-      - service: persistent_notification.create
-        data:
-          title: "DEBUG: Detenido"
-          message: "Bloqueo ACTIVO (entidad: {{ v_blocking }})"
-      - stop: "Bloqueo activo"
+  - condition: template
+    value_template: "{{ v_blocking in [none, [], ''] or not is_state(v_blocking, 'on') }}"
 
   # 2. Comprobar Luminosidad
-  - if:
-      - condition: or
-        conditions:
-          - condition: template
-            value_template: "{{ not v_use_lux }}"
-          - condition: template
-            value_template: "{{ v_lux_sensor in [none, [], ''] }}"
-          - condition: template
-            value_template: "{{ states(v_lux_sensor) | float(0) <= (v_lux_threshold | float) }}"
-    then:
-      - service: system_log.write
-        data:
-          message: "DEBUG: Luminosidad OK"
-          level: info
-    else:
-      - service: persistent_notification.create
-        data:
-          title: "DEBUG: Detenido"
-          message: "Hay demasiada luz ({{ states(v_lux_sensor) }} lux vs umbral {{ v_lux_threshold }})"
-      - stop: "Demasiada luz"
+  - condition: template
+    value_template: >
+      {% if v_use_lux and v_lux_sensor not in [none, [], ''] %}
+        {{ states(v_lux_sensor) | float(0) <= (v_lux_threshold | float) }}
+      {% else %}
+        true
+      {% endif %}
 
   # 3. Comprobar Horario
-  - if:
-      - condition: or
-        conditions:
-          - condition: template
-            value_template: "{{ not v_use_time }}"
-          - condition: time
-            after: !input time_start
-            before: !input time_end
-    then:
-      - service: system_log.write
-        data:
-          message: "DEBUG: Horario OK"
-          level: info
-    else:
-      - service: persistent_notification.create
-        data:
-          title: "DEBUG: Detenido"
-          message: "Fuera de horario ({{ now().strftime('%H:%M:%S') }} no está entre {{ v_time_start }} y {{ v_time_end }})"
-      - stop: "Fuera de horario"
+  - condition: template
+    value_template: >
+      {% if v_use_time %}
+        {{ (now().strftime('%H:%M:%S') >= v_time_start and now().strftime('%H:%M:%S') <= v_time_end) if v_time_start <= v_time_end else (now().strftime('%H:%M:%S') >= v_time_start or now().strftime('%H:%M:%S') <= v_time_end) }}
+      {% else %}
+        true
+      {% endif %}
 
-  # 4. Encendido
-  - service: persistent_notification.create
-    data:
-      title: "DEBUG: Encendiendo"
-      message: "Todas las condiciones OK. Encendiendo luces."
-  
+action:
+  # 1. Delay de inicio (si aplica)
   - delay:
       seconds: "{{ v_on_delay }}"
   
+  # 2. Verificar que sigue habiendo movimiento (solo si hubo delay)
   - if:
       - condition: template
         value_template: "{{ v_on_delay | float > 0 }}"
     then:
-      - if:
-          - condition: state
-            entity_id: !input motion_entity
-            state: "on"
-        then:
-          - service: system_log.write
-            data:
-              message: "DEBUG: Sigue habiendo movimiento tras delay"
-              level: info
-        else:
-          - service: persistent_notification.create
-            data:
-              title: "DEBUG: Detenido"
-              message: "Ya no hay movimiento tras el delay inicial."
-          - stop: "Ya no hay movimiento"
+      - condition: state
+        entity_id: !input motion_entity
+        state: "on"
 
+  # 3. Encender luces
   - service: homeassistant.turn_on
     target: !input target_lights
 
-  # 5. Espera y apagado
+  # 4. Esperar a que el sensor esté OFF por el tiempo definido
   - wait_for_trigger:
       - platform: state
         entity_id: !input motion_entity
@@ -219,9 +161,6 @@ action:
       hours: 2
     continue_on_timeout: true
 
+  # 5. Apagar luces
   - service: homeassistant.turn_off
     target: !input target_lights
-  - service: persistent_notification.create
-    data:
-      title: "DEBUG: Apagado"
-      message: "Tiempo agotado sin movimiento. Luces apagadas."
