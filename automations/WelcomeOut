@@ -1,139 +1,179 @@
 blueprint:
-  name: "WelcomeExt"
+  name: "Welcome Home + Presencia (Flexible)"
   description: >
-    Enciende las luces exteriores cuando los miembros autorizados llegan a casa.
-    Permite restringir el encendido a la noche y configurar el apagado por temporizador, por hora fija, o ambos (el que ocurra primero).
+    Enciende luces al llegar a casa (GPS) o por presencia.
+    Permite definir qué luces se apagarán solas y cuáles quedarán encendidas permanentemente.
   domain: automation
   input:
-    # ----------------------------------
-    # 1. DISPARADORES Y MIEMBROS
-    # ----------------------------------
+    # 1. DISPARADORES
     authorized_people:
       name: "👥 Miembros Autorizados"
-      description: "Selecciona las personas cuya llegada activará las luces."
       selector:
         entity:
           domain: person
           multiple: true
 
-    # ----------------------------------
-    # 2. DISPOSITIVOS
-    # ----------------------------------
-    target_lights:
-      name: "💡 Luces de Exterior"
-      description: "Las luces o zonas que quieres que se enciendan."
+    motion_sensor:
+      name: "🏃 Sensor de Presencia (Opcional)"
+      default: []
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class: motion
+
+    # 2. DISPOSITIVOS (DIFERENCIADOS)
+    target_lights_auto:
+      name: "💡 Luces con Auto-Apagado"
+      description: "Luces que seguirán la lógica de temporizadores (cortesía/presencia)."
+      default: { "entities": [] }
       selector:
         target:
           entity:
             - domain: light
             - domain: switch
 
-    # ----------------------------------
-    # 3. CONDICIÓN NOCTURNA
-    # ----------------------------------
+    target_lights_permanent:
+      name: "🔦 Luces Permanentes"
+      description: "Luces que se encenderán pero NO se apagarán automáticamente."
+      default: { "entities": [] }
+      selector:
+        target:
+          entity:
+            - domain: light
+            - domain: switch
+
+    # 3. CONDICIONES
     only_at_night:
       name: "🌙 Activar solo de noche"
-      description: "Si está activo, las luces solo se encenderán si el sol se ha puesto."
       default: true
       selector:
         boolean: {}
 
-    # ----------------------------------
-    # 4. OPCIONES DE APAGADO
-    # ----------------------------------
-    use_timer:
-      name: "⏳ Usar Temporizador de Apagado"
-      description: "Las luces se apagarán tras un tiempo determinado desde el encendido."
-      default: true
+    illuminance_sensor:
+      name: "☀️ Sensor de Luminosidad (Opcional)"
+      default: []
       selector:
-        boolean: {}
-    
-    timer_duration:
-      name: "↳ ⏱️ Tiempo de espera"
-      description: "Tiempo que las luces permanecerán encendidas (en minutos)."
+        entity:
+          domain: sensor
+          device_class: illuminance
+
+    illuminance_threshold:
+      name: "↳ Umbral de Lux"
+      default: 50
+      selector:
+        number:
+          min: 1
+          max: 1000
+          unit_of_measurement: "lux"
+
+    # 4. TIEMPOS
+    on_delay:
+      name: "⏳ Retraso de Inicio (Movimiento)"
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 60
+          unit_of_measurement: "segundos"
+
+    arrival_duration:
+      name: "⏱️ Tiempo de Cortesía (Llegada)"
+      description: "Minutos para apagar si no hay movimiento tras llegar."
       default: 5
       selector:
         number:
           min: 1
-          max: 60
+          max: 30
           unit_of_measurement: "minutos"
 
-    use_fixed_time:
-      name: "⏰ Usar Hora Fija de Apagado"
-      description: "Las luces se apagarán a una hora concreta (ej: a las 00:00)."
-      default: false
+    off_delay:
+      name: "⏱️ Temporizador de Salida (Presencia)"
+      description: "Segundos sin movimiento antes de apagar."
+      default: 120
       selector:
-        boolean: {}
-
-    fixed_off_time:
-      name: "↳ 🕒 Hora de apagado"
-      default: "00:00:00"
-      selector:
-        time: {}
+        number:
+          min: 10
+          max: 3600
+          unit_of_measurement: "segundos"
 
 mode: restart
 
-# VARIABLES INTERNAS
 variables:
-  solo_noche: !input only_at_night
-  usa_timer: !input use_timer
-  minutos_timer: !input timer_duration
-  usa_hora_fija: !input use_fixed_time
-  target_ent: !input target_lights
+  v_solo_noche: !input only_at_night
+  v_lux_sensor: !input illuminance_sensor
+  v_lux_threshold: !input illuminance_threshold
+  v_motion_sensor: !input motion_sensor
+  v_on_delay: !input on_delay
+  v_arrival_min: !input arrival_duration
+  v_off_sec: !input off_delay
+  v_lights_auto: !input target_lights_auto
+  v_lights_perm: !input target_lights_permanent
 
 trigger:
   - platform: state
     entity_id: !input authorized_people
     to: "home"
+    id: "llegada"
+  - platform: state
+    entity_id: !input motion_sensor
+    from: "off"
+    to: "on"
+    id: "movimiento"
 
 condition:
-  # Condición de noche (si está activa)
-  - condition: or
+  - condition: and
     conditions:
-      - condition: template
-        value_template: "{{ solo_noche == false }}"
-      - condition: state
-        entity_id: sun.sun
-        state: "below_horizon"
+      - condition: or
+        conditions:
+          - condition: template
+            value_template: "{{ v_solo_noche == false }}"
+          - condition: state
+            entity_id: sun.sun
+            state: "below_horizon"
+      - condition: or
+        conditions:
+          - condition: template
+            value_template: "{{ v_lux_sensor == [] }}"
+          - condition: template
+            value_template: "{{ states(v_lux_sensor) | float(0) <= (v_lux_threshold | float) }}"
 
 action:
-  # 1. Encendemos las luces
-  - service: homeassistant.turn_on
-    target: !input target_lights
-
-  # 2. Lógica de espera para el apagado
+  # 1. Encendido inicial
   - choose:
-      # CASO A: Ambos activos (espera el primero que ocurra)
       - conditions:
-          - condition: template
-            value_template: "{{ usa_timer and usa_hora_fija }}"
-        sequence:
-          - wait_for_trigger:
-              - platform: time
-                at: !input fixed_off_time
-            timeout:
-              minutes: "{{ minutos_timer }}"
-            continue_on_timeout: true
-
-      # CASO B: Solo Temporizador
-      - conditions:
-          - condition: template
-            value_template: "{{ usa_timer and not usa_hora_fija }}"
+          - condition: trigger
+            id: "movimiento"
         sequence:
           - delay:
-              minutes: "{{ minutos_timer }}"
-
-      # CASO C: Solo Hora Fija
+              seconds: "{{ v_on_delay }}"
+          - condition: state
+            entity_id: !input motion_sensor
+            state: "on"
+          - service: homeassistant.turn_on
+            target: !input target_lights_auto
+          - service: homeassistant.turn_on
+            target: !input target_lights_permanent
       - conditions:
-          - condition: template
-            value_template: "{{ not usa_timer and usa_hora_fija }}"
+          - condition: trigger
+            id: "llegada"
         sequence:
-          - wait_for_trigger:
-              - platform: time
-                at: !input fixed_off_time
+          - service: homeassistant.turn_on
+            target: !input target_lights_auto
+          - service: homeassistant.turn_on
+            target: !input target_lights_permanent
 
-  # 3. Apagamos las luces (si se cumplió alguna condición de espera)
-  - condition: template
-    value_template: "{{ usa_timer or usa_hora_fija }}"
+  # 2. Lógica de apagado (SOLO PARA LUCES AUTO)
+  - wait_for_trigger:
+      - platform: state
+        entity_id: !input motion_sensor
+        from: "on"
+        to: "off"
+        for:
+          seconds: "{{ v_off_sec }}"
+    timeout:
+      minutes: "{{ v_arrival_min }}"
+    continue_on_timeout: true
+
+  # 3. Apagado final (SOLO PARA LUCES AUTO)
   - service: homeassistant.turn_off
-    target: !input target_lights
+    target: !input target_lights_auto
