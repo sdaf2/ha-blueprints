@@ -1,5 +1,5 @@
 blueprint:
-  name: "Battery Alert"
+  name: "Battery Low"
   description: >
     Monitoriza una lista de dispositivos y envía una notificación cuando el nivel de batería 
     cae por debajo del umbral definido.
@@ -26,10 +26,10 @@ blueprint:
 
     notify_service:
       name: "📲 Servicio de Notificación"
-      description: "Selecciona el servicio de notificación que quieres usar."
+      description: "Escribe el nombre del servicio (ej: notify.mobile_app_tu_movil)."
       default: notify.persistent_notification
       selector:
-        service: {}
+        text: {}
 
 mode: parallel
 max: 10
