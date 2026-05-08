@@ -21,8 +21,7 @@ blueprint:
 
     target_lights_auto:
       name: "💡 Luces con Auto-Apagado"
-      description: "Luces que seguirán la lógica de temporizadores."
-      default: 
+      default: {}
       selector:
         target:
           entity:
@@ -31,8 +30,7 @@ blueprint:
 
     target_lights_permanent:
       name: "🔦 Luces Permanentes"
-      description: "Luces que NO se apagarán automáticamente."
-      default: 
+      default: {}
       selector:
         target:
           entity:
@@ -90,9 +88,17 @@ blueprint:
 
 mode: restart
 
+# ----------------------------------
+# VARIABLES PARA USO EN TEMPLATES
+# ----------------------------------
 variables:
-  # Capturamos los inputs en variables
-  v_motion: !input motion_sensor
+  v_solo_noche: !input only_at_night
+  v_lux_sensor: !input illuminance_sensor
+  v_lux_threshold: !input illuminance_threshold
+  v_motion_sensor: !input motion_sensor
+  v_on_delay: !input on_delay
+  v_arrival_min: !input arrival_duration
+  v_off_sec: !input off_delay
   v_lights_auto: !input target_lights_auto
   v_lights_perm: !input target_lights_permanent
 
@@ -110,23 +116,32 @@ trigger:
 condition:
   - condition: and
     conditions:
+      # Condición Nocturna
       - condition: or
         conditions:
           - condition: template
-            value_template: "{{ !input only_at_night == false or is_state('sun.sun', 'below_horizon') }}"
+            value_template: "{{ v_solo_noche == false }}"
+          - condition: state
+            entity_id: sun.sun
+            state: "below_horizon"
+      # Condición Luminosidad
       - condition: or
         conditions:
           - condition: template
-            value_template: "{{ !input illuminance_sensor == [] or states(!input illuminance_sensor) | float(0) <= (!input illuminance_threshold | float) }}"
+            value_template: "{{ v_lux_sensor == [] or v_lux_sensor == none }}"
+          - condition: template
+            value_template: "{{ states(v_lux_sensor) | float(0) <= (v_lux_threshold | float) }}"
 
 action:
+  # 1. Encendido inicial
   - choose:
+      # Caso Movimiento
       - conditions:
           - condition: trigger
             id: "movimiento"
         sequence:
           - delay:
-              seconds: !input on_delay
+              seconds: "{{ v_on_delay }}"
           - condition: state
             entity_id: !input motion_sensor
             state: "on"
@@ -134,6 +149,7 @@ action:
             target: !input target_lights_auto
           - service: homeassistant.turn_on
             target: !input target_lights_permanent
+      # Caso Llegada
       - conditions:
           - condition: trigger
             id: "llegada"
@@ -143,16 +159,18 @@ action:
           - service: homeassistant.turn_on
             target: !input target_lights_permanent
 
+  # 2. Lógica de espera (Handoff)
   - wait_for_trigger:
       - platform: state
         entity_id: !input motion_sensor
         from: "on"
         to: "off"
         for:
-          seconds: !input off_delay
+          seconds: "{{ v_off_sec }}"
     timeout:
-      minutes: !input arrival_duration
+      minutes: "{{ v_arrival_min }}"
     continue_on_timeout: true
 
+  # 3. Apagado final (Solo luces auto)
   - service: homeassistant.turn_off
     target: !input target_lights_auto
