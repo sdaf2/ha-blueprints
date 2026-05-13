@@ -1,5 +1,5 @@
 blueprint:
-  name: "Mov Lights"
+  name: "Interior: Luces por Movimiento (Avanzado)"
   description: >
     Control inteligente de luces interiores mediante sensor de movimiento o presencia.
     Incluye temporizadores, sensores de luminosidad y restricciones horarias.
@@ -66,6 +66,13 @@ blueprint:
           max: 1000
           unit_of_measurement: "lux"
 
+    use_sun_night:
+      name: "🌙 Usar Condición Solar (Solo Noche)"
+      description: "Actívalo para que solo se encienda cuando el sol se haya puesto."
+      default: false
+      selector:
+        boolean: {}
+
     use_time_range:
       name: "⏰ Usar Rango Horario"
       description: "Actívalo para que solo funcione entre ciertas horas."
@@ -101,6 +108,7 @@ variables:
   v_use_time: !input use_time_range
   v_time_start: !input time_start
   v_time_end: !input time_end
+  v_use_sun_night: !input use_sun_night
   v_blocking: !input blocking_entity
   v_on_delay: !input on_delay
 
@@ -128,6 +136,15 @@ condition:
     value_template: >
       {% if v_use_time %}
         {{ (now().strftime('%H:%M:%S') >= v_time_start and now().strftime('%H:%M:%S') <= v_time_end) if v_time_start <= v_time_end else (now().strftime('%H:%M:%S') >= v_time_start or now().strftime('%H:%M:%S') <= v_time_end) }}
+      {% else %}
+        true
+      {% endif %}
+
+  # 4. Comprobar Sol (Noche)
+  - condition: template
+    value_template: >
+      {% if v_use_sun_night %}
+        {{ is_state('sun.sun', 'below_horizon') }}
       {% else %}
         true
       {% endif %}
