@@ -9,7 +9,7 @@ blueprint:
       selector:
         device:
           integration: zha
-          manufacturer: _TZ3000_wkai4ga5
+          manufacturer: _TZ3000_kfu8zapd
           model: TS0044
     button_one_single_press:
       name: Button 1 (single press)
