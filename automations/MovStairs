@@ -1,0 +1,181 @@
+blueprint:
+  name: "Motion Stairs"
+  description: >
+    Control avanzado para escaleras y pasillos.
+    Detecta si entras por un extremo u otro y enciende las luces en cascada en la dirección en la que caminas.
+    Soporta hasta 4 relés/luces individuales.
+  domain: automation
+  input:
+    sensor_bottom:
+      name: "🏃 Sensor 1 (Ej. Abajo / Entrada)"
+      description: "Sensor que inicia la secuencia del 1 al 4."
+      selector:
+        entity:
+          domain: binary_sensor
+
+    sensor_top:
+      name: "🏃 Sensor 2 (Ej. Arriba / Salida)"
+      description: "Sensor que inicia la secuencia inversa, del 4 al 1."
+      selector:
+        entity:
+          domain: binary_sensor
+
+    light_1:
+      name: "💡 Luz 1 (Extremo del Sensor 1)"
+      selector:
+        entity:
+          domain: [light, switch]
+    light_2:
+      name: "💡 Luz 2"
+      default: ""
+      selector:
+        entity:
+          domain: [light, switch]
+    light_3:
+      name: "💡 Luz 3"
+      default: ""
+      selector:
+        entity:
+          domain: [light, switch]
+    light_4:
+      name: "💡 Luz 4 (Extremo del Sensor 2)"
+      default: ""
+      selector:
+        entity:
+          domain: [light, switch]
+
+    delay_between:
+      name: "⏱️ Retraso entre luces (Escalonado)"
+      description: "Tiempo que tarda en encenderse la siguiente luz."
+      default: 0.5
+      selector:
+        number:
+          min: 0.1
+          max: 5.0
+          step: 0.1
+          unit_of_measurement: "segundos"
+
+    off_delay:
+      name: "⏳ Tiempo hasta apagar"
+      description: "Tiempo sin detectar NADA de movimiento antes de apagar."
+      default: 30
+      selector:
+        number:
+          min: 5
+          max: 600
+          unit_of_measurement: "segundos"
+
+    turn_off_mode:
+      name: "Modo de Apagado"
+      description: "¿Cómo quieres que se apaguen las luces?"
+      default: "all_at_once"
+      selector:
+        select:
+          options:
+            - label: "Todas a la vez"
+              value: "all_at_once"
+            - label: "Escalonado (mismo sentido que al encender)"
+              value: "sequential"
+            - label: "Escalonado (sentido contrario al encender)"
+              value: "sequential_reverse"
+
+    use_sun_night:
+      name: "🌙 Solo de Noche"
+      description: "Actívalo para que solo funcione si el sol se ha puesto."
+      default: false
+      selector:
+        boolean: {}
+
+# Mode single es vital aquí: evita que si pisas el sensor de salida a mitad de camino, se invierta la secuencia.
+# Simplemente ignorará el segundo sensor para iniciar secuencias, pero SÍ servirá para resetear el timer de apagado.
+mode: single
+
+variables:
+  v_sensor_bottom: !input sensor_bottom
+  v_sensor_top: !input sensor_top
+  v_light_1: !input light_1
+  v_light_2: !input light_2
+  v_light_3: !input light_3
+  v_light_4: !input light_4
+  v_delay: !input delay_between
+  v_off_delay: !input off_delay
+  v_turn_off_mode: !input turn_off_mode
+  v_use_sun_night: !input use_sun_night
+
+  # Filtramos cualquier hueco de luz vacío para crear las secuencias limpias
+  up_sequence: >
+    {% set lights = [v_light_1, v_light_2, v_light_3, v_light_4] %}
+    {{ lights | reject('none') | reject('eq', '') | list }}
+  down_sequence: >
+    {% set lights = [v_light_4, v_light_3, v_light_2, v_light_1] %}
+    {{ lights | reject('none') | reject('eq', '') | list }}
+  
+  # Seleccionamos la secuencia activa según quién disparó
+  active_sequence: "{{ up_sequence if trigger.id == 'bottom' else down_sequence }}"
+
+  # Seleccionamos la secuencia de apagado según el modo
+  off_sequence: >
+    {% if v_turn_off_mode == 'sequential' %}
+      {{ up_sequence if trigger.id == 'bottom' else down_sequence }}
+    {% elif v_turn_off_mode == 'sequential_reverse' %}
+      {{ down_sequence if trigger.id == 'bottom' else up_sequence }}
+    {% else %}
+      {{ up_sequence }}
+    {% endif %}
+
+trigger:
+  - platform: state
+    entity_id: !input sensor_bottom
+    to: "on"
+    id: "bottom"
+  - platform: state
+    entity_id: !input sensor_top
+    to: "on"
+    id: "top"
+
+condition:
+  - condition: template
+    value_template: >
+      {% if v_use_sun_night %}
+        {{ is_state('sun.sun', 'below_horizon') }}
+      {% else %}
+        true
+      {% endif %}
+
+action:
+  # 1. Encendido Escalonado
+  - repeat:
+      for_each: "{{ active_sequence }}"
+      sequence:
+        - service: homeassistant.turn_on
+          target:
+            entity_id: "{{ item }}"
+        - delay:
+            seconds: "{{ v_delay }}"
+
+  # 2. Esperar a que NADIE detecte movimiento
+  - wait_for_trigger:
+      - platform: template
+        value_template: "{{ is_state(v_sensor_bottom, 'off') and is_state(v_sensor_top, 'off') }}"
+        for:
+          seconds: "{{ v_off_delay }}"
+    continue_on_timeout: false
+
+  # 3. Apagado (Escalonado o Todo a la vez)
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ v_turn_off_mode == 'all_at_once' }}"
+        sequence:
+          - service: homeassistant.turn_off
+            target:
+              entity_id: "{{ active_sequence }}"
+    default:
+      - repeat:
+          for_each: "{{ off_sequence }}"
+          sequence:
+            - service: homeassistant.turn_off
+              target:
+                entity_id: "{{ item }}"
+            - delay:
+                seconds: "{{ v_delay }}"
