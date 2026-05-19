@@ -144,14 +144,83 @@ condition:
 
 action:
   # 1. Encendido Escalonado
-  - repeat:
-      for_each: "{{ active_sequence }}"
-      sequence:
-        - service: homeassistant.turn_on
-          target:
-            entity_id: "{{ item }}"
-        - delay:
-            seconds: "{{ v_delay }}"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'bottom' }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ v_light_1 != '' and v_light_1 != none }}"
+            then:
+              - service: homeassistant.turn_on
+                target:
+                  entity_id: "{{ v_light_1 }}"
+              - delay:
+                  seconds: "{{ v_delay }}"
+          - if:
+              - condition: template
+                value_template: "{{ v_light_2 != '' and v_light_2 != none }}"
+            then:
+              - service: homeassistant.turn_on
+                target:
+                  entity_id: "{{ v_light_2 }}"
+              - delay:
+                  seconds: "{{ v_delay }}"
+          - if:
+              - condition: template
+                value_template: "{{ v_light_3 != '' and v_light_3 != none }}"
+            then:
+              - service: homeassistant.turn_on
+                target:
+                  entity_id: "{{ v_light_3 }}"
+              - delay:
+                  seconds: "{{ v_delay }}"
+          - if:
+              - condition: template
+                value_template: "{{ v_light_4 != '' and v_light_4 != none }}"
+            then:
+              - service: homeassistant.turn_on
+                target:
+                  entity_id: "{{ v_light_4 }}"
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'top' }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ v_light_4 != '' and v_light_4 != none }}"
+            then:
+              - service: homeassistant.turn_on
+                target:
+                  entity_id: "{{ v_light_4 }}"
+              - delay:
+                  seconds: "{{ v_delay }}"
+          - if:
+              - condition: template
+                value_template: "{{ v_light_3 != '' and v_light_3 != none }}"
+            then:
+              - service: homeassistant.turn_on
+                target:
+                  entity_id: "{{ v_light_3 }}"
+              - delay:
+                  seconds: "{{ v_delay }}"
+          - if:
+              - condition: template
+                value_template: "{{ v_light_2 != '' and v_light_2 != none }}"
+            then:
+              - service: homeassistant.turn_on
+                target:
+                  entity_id: "{{ v_light_2 }}"
+              - delay:
+                  seconds: "{{ v_delay }}"
+          - if:
+              - condition: template
+                value_template: "{{ v_light_1 != '' and v_light_1 != none }}"
+            then:
+              - service: homeassistant.turn_on
+                target:
+                  entity_id: "{{ v_light_1 }}"
 
   # 2. Esperar a que NADIE detecte movimiento
   - wait_for_trigger:
@@ -169,13 +238,88 @@ action:
         sequence:
           - service: homeassistant.turn_off
             target:
-              entity_id: "{{ active_sequence }}"
-    default:
-      - repeat:
-          for_each: "{{ off_sequence }}"
-          sequence:
-            - service: homeassistant.turn_off
-              target:
-                entity_id: "{{ item }}"
-            - delay:
-                seconds: "{{ v_delay }}"
+              entity_id: >
+                {% set lights = [v_light_1, v_light_2, v_light_3, v_light_4] %}
+                {{ lights | reject('none') | reject('eq', '') | list }}
+      
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ (v_turn_off_mode == 'sequential' and trigger.id == 'bottom') or 
+                 (v_turn_off_mode == 'sequential_reverse' and trigger.id == 'top') }}
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ v_light_1 != '' and v_light_1 != none }}"
+            then:
+              - service: homeassistant.turn_off
+                target:
+                  entity_id: "{{ v_light_1 }}"
+              - delay:
+                  seconds: "{{ v_delay }}"
+          - if:
+              - condition: template
+                value_template: "{{ v_light_2 != '' and v_light_2 != none }}"
+            then:
+              - service: homeassistant.turn_off
+                target:
+                  entity_id: "{{ v_light_2 }}"
+              - delay:
+                  seconds: "{{ v_delay }}"
+          - if:
+              - condition: template
+                value_template: "{{ v_light_3 != '' and v_light_3 != none }}"
+            then:
+              - service: homeassistant.turn_off
+                target:
+                  entity_id: "{{ v_light_3 }}"
+              - delay:
+                  seconds: "{{ v_delay }}"
+          - if:
+              - condition: template
+                value_template: "{{ v_light_4 != '' and v_light_4 != none }}"
+            then:
+              - service: homeassistant.turn_off
+                target:
+                  entity_id: "{{ v_light_4 }}"
+                  
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ (v_turn_off_mode == 'sequential' and trigger.id == 'top') or 
+                 (v_turn_off_mode == 'sequential_reverse' and trigger.id == 'bottom') }}
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ v_light_4 != '' and v_light_4 != none }}"
+            then:
+              - service: homeassistant.turn_off
+                target:
+                  entity_id: "{{ v_light_4 }}"
+              - delay:
+                  seconds: "{{ v_delay }}"
+          - if:
+              - condition: template
+                value_template: "{{ v_light_3 != '' and v_light_3 != none }}"
+            then:
+              - service: homeassistant.turn_off
+                target:
+                  entity_id: "{{ v_light_3 }}"
+              - delay:
+                  seconds: "{{ v_delay }}"
+          - if:
+              - condition: template
+                value_template: "{{ v_light_2 != '' and v_light_2 != none }}"
+            then:
+              - service: homeassistant.turn_off
+                target:
+                  entity_id: "{{ v_light_2 }}"
+              - delay:
+                  seconds: "{{ v_delay }}"
+          - if:
+              - condition: template
+                value_template: "{{ v_light_1 != '' and v_light_1 != none }}"
+            then:
+              - service: homeassistant.turn_off
+                target:
+                  entity_id: "{{ v_light_1 }}"
