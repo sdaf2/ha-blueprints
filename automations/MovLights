@@ -1,29 +1,37 @@
 blueprint:
-  name: "Interior: Luces por Movimiento (Avanzado)"
+  name: "Motion Lights"
   description: >
-    Control inteligente de luces interiores mediante sensor de movimiento o presencia.
-    Incluye temporizadores, sensores de luminosidad y restricciones horarias.
+    Control optimizado de luces mediante uno o varios sensores de movimiento.
+    Si cualquier sensor detecta movimiento, se enciende (condicionado al sol opcional).
+    Cuando TODOS los sensores dejen de detectar movimiento por X tiempo, se apaga.
   domain: automation
   input:
-    motion_entity:
-      name: "🏃 Sensor de Movimiento / Presencia"
-      description: "El sensor que activará las luces."
+    motion_entities:
+      name: "🏃 Sensores de Movimiento"
+      description: "Selecciona uno o más sensores. Con que uno detecte, basta."
       selector:
         entity:
           domain: binary_sensor
+          multiple: true
 
     target_lights:
       name: "💡 Luces a controlar"
-      description: "Luces, grupos o interruptores que quieres encender."
       selector:
         target:
           entity:
             - domain: light
             - domain: switch
 
+    use_sun_night:
+      name: "🌙 Solo de Noche"
+      description: "Actívalo para que solo funcione si el sol se ha puesto."
+      default: false
+      selector:
+        boolean: {}
+
     on_delay:
-      name: "⏳ Temporizador de Inicio"
-      description: "Tiempo que debe mantenerse el movimiento antes de encender (0 para instantáneo)."
+      name: "⏳ Retraso al encender"
+      description: "Segundos de movimiento continuo necesarios antes de encender."
       default: 0
       selector:
         number:
@@ -32,115 +40,28 @@ blueprint:
           unit_of_measurement: "segundos"
 
     off_delay:
-      name: "⏱️ Temporizador de Apagado"
-      description: "Tiempo a esperar tras el último movimiento antes de apagar."
+      name: "⏱️ Retraso al apagar"
+      description: "Segundos a esperar tras no detectar NINGÚN movimiento."
       default: 120
       selector:
         number:
-          min: 5
+          min: 0
           max: 3600
           unit_of_measurement: "segundos"
-
-    use_illuminance:
-      name: "☀️ Usar Sensor de Luminosidad"
-      description: "Actívalo para que solo se encienda si hay poca luz."
-      default: false
-      selector:
-        boolean: {}
-
-    illuminance_sensor:
-      name: "↳ 👁️ Sensor de Lux"
-      default: []
-      selector:
-        entity:
-          domain: sensor
-          device_class: illuminance
-
-    illuminance_threshold:
-      name: "↳ 🔆 Umbral de Lux"
-      description: "Solo se encenderá si los lux están por debajo de este valor."
-      default: 50
-      selector:
-        number:
-          min: 1
-          max: 1000
-          unit_of_measurement: "lux"
-
-    use_sun_night:
-      name: "🌙 Usar Condición Solar (Solo Noche)"
-      description: "Actívalo para que solo se encienda cuando el sol se haya puesto."
-      default: false
-      selector:
-        boolean: {}
-
-    use_time_range:
-      name: "⏰ Usar Rango Horario"
-      description: "Actívalo para que solo funcione entre ciertas horas."
-      default: false
-      selector:
-        boolean: {}
-
-    time_start:
-      name: "↳ 🕒 Hora de Inicio"
-      default: "00:00:00"
-      selector:
-        time: {}
-
-    time_end:
-      name: "↳ 🕒 Hora de Fin"
-      default: "23:59:59"
-      selector:
-        time: {}
-
-    blocking_entity:
-      name: "🚫 Entidad de Bloqueo (Opcional)"
-      description: "Si esta entidad está 'on', la automatización NO se ejecutará."
-      default: []
-      selector:
-        entity: {}
 
 mode: restart
 
 variables:
-  v_use_lux: !input use_illuminance
-  v_lux_sensor: !input illuminance_sensor
-  v_lux_threshold: !input illuminance_threshold
-  v_use_time: !input use_time_range
-  v_time_start: !input time_start
-  v_time_end: !input time_end
+  motion_entities: !input motion_entities
   v_use_sun_night: !input use_sun_night
-  v_blocking: !input blocking_entity
   v_on_delay: !input on_delay
 
 trigger:
   - platform: state
-    entity_id: !input motion_entity
+    entity_id: !input motion_entities
     to: "on"
 
 condition:
-  # 1. Comprobar Bloqueo
-  - condition: template
-    value_template: "{{ v_blocking in [none, [], ''] or not is_state(v_blocking, 'on') }}"
-
-  # 2. Comprobar Luminosidad
-  - condition: template
-    value_template: >
-      {% if v_use_lux and v_lux_sensor not in [none, [], ''] %}
-        {{ states(v_lux_sensor) | float(0) <= (v_lux_threshold | float) }}
-      {% else %}
-        true
-      {% endif %}
-
-  # 3. Comprobar Horario
-  - condition: template
-    value_template: >
-      {% if v_use_time %}
-        {{ (now().strftime('%H:%M:%S') >= v_time_start and now().strftime('%H:%M:%S') <= v_time_end) if v_time_start <= v_time_end else (now().strftime('%H:%M:%S') >= v_time_start or now().strftime('%H:%M:%S') <= v_time_end) }}
-      {% else %}
-        true
-      {% endif %}
-
-  # 4. Comprobar Sol (Noche)
   - condition: template
     value_template: >
       {% if v_use_sun_night %}
@@ -150,34 +71,28 @@ condition:
       {% endif %}
 
 action:
-  # 1. Delay de inicio (si aplica)
+  # Delay de inicio (si aplica)
   - delay:
       seconds: "{{ v_on_delay }}"
   
-  # 2. Verificar que sigue habiendo movimiento (solo si hubo delay)
+  # Verificar si todavía hay movimiento (alguno sigue en 'on')
   - if:
       - condition: template
         value_template: "{{ v_on_delay | float > 0 }}"
     then:
-      - condition: state
-        entity_id: !input motion_entity
-        state: "on"
+      - condition: template
+        value_template: "{{ expand(motion_entities) | selectattr('state', 'eq', 'on') | list | length > 0 }}"
 
-  # 3. Encender luces
   - service: homeassistant.turn_on
     target: !input target_lights
 
-  # 4. Esperar a que el sensor esté OFF por el tiempo definido
+  # Esperar a que TODOS los sensores estén en OFF
   - wait_for_trigger:
-      - platform: state
-        entity_id: !input motion_entity
-        to: "off"
+      - platform: template
+        value_template: "{{ expand(motion_entities) | selectattr('state', 'eq', 'on') | list | length == 0 }}"
         for:
           seconds: !input off_delay
-    timeout:
-      hours: 2
-    continue_on_timeout: true
+    continue_on_timeout: false
 
-  # 5. Apagar luces
   - service: homeassistant.turn_off
     target: !input target_lights
