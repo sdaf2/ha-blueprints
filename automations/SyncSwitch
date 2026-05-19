@@ -1,35 +1,50 @@
 blueprint:
   name: "Sync Switch"
   description: >
-    Permite usar varios pulsadores (binary sensors) para controlar una misma luz o grupo de luces.
-    Cada pulsación alterna el estado (on/off) de las luces seleccionadas.
+    Sincroniza el estado de varios interruptores. Si uno se enciende, todos se encienden. 
+    Si uno se apaga, todos se apagan. Útil para conmutadas con interruptores inteligentes.
   domain: automation
   input:
-    push_buttons:
-      name: "🔘 Pulsadores"
-      description: "Selecciona los pulsadores que controlarán la luz."
+    synced_entities:
+      name: "🔌 Interruptores a sincronizar"
+      description: "Selecciona los interruptores que quieres mantener con el mismo estado."
       selector:
         entity:
-          domain: binary_sensor
+          domain: 
+            - switch
+            - light
           multiple: true
-
-    target_lights:
-      name: "💡 Luces"
-      description: "Luces o grupos que quieres controlar."
-      selector:
-        target:
-          entity:
-            - domain: light
-            - domain: switch
 
 mode: restart
 
+variables:
+  entities: !input synced_entities
+
 trigger:
   - platform: state
-    entity_id: !input push_buttons
-    from: "off"
-    to: "on"
+    entity_id: !input synced_entities
+    from: 
+      - "on"
+      - "off"
+    to:
+      - "on"
+      - "off"
+
+condition:
+  # Evitamos ejecuciones innecesarias si el estado ya es el mismo
+  - condition: template
+    value_template: "{{ trigger.from_state.state != trigger.to_state.state }}"
 
 action:
-  - service: homeassistant.toggle
-    target: !input target_lights
+  - variables:
+      targets: >
+        {{ expand(entities)
+           | rejectattr('entity_id', 'eq', trigger.entity_id)
+           | rejectattr('state', 'eq', trigger.to_state.state)
+           | map(attribute='entity_id')
+           | list }}
+  - condition: template
+    value_template: "{{ targets | length > 0 }}"
+  - service: "homeassistant.turn_{{ trigger.to_state.state }}"
+    target:
+      entity_id: "{{ targets }}"
