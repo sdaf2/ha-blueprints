@@ -3,7 +3,7 @@ blueprint:
   description: >
     Control avanzado para escaleras y pasillos.
     Detecta si entras por un extremo u otro y enciende las luces en cascada en la dirección en la que caminas.
-    Soporta hasta 4 relés/luces individuales.
+    Soporta hasta 4 relés/luces individuales con tiempos personalizados entre cada una.
   domain: automation
   input:
     sensor_bottom:
@@ -44,14 +44,63 @@ blueprint:
         entity:
           domain: [light, switch]
 
-    delay_between:
-      name: "⏱️ Retraso entre luces (Escalonado)"
-      description: "Tiempo que tarda en encenderse la siguiente luz."
+    delay_up_1_2:
+      name: "⏱️ SUBIENDO: Retraso Luz 1 ➔ 2"
       default: 0.5
       selector:
         number:
-          min: 0.1
-          max: 5.0
+          min: 0.0
+          max: 10.0
+          step: 0.1
+          unit_of_measurement: "segundos"
+
+    delay_up_2_3:
+      name: "⏱️ SUBIENDO: Retraso Luz 2 ➔ 3"
+      default: 0.5
+      selector:
+        number:
+          min: 0.0
+          max: 10.0
+          step: 0.1
+          unit_of_measurement: "segundos"
+
+    delay_up_3_4:
+      name: "⏱️ SUBIENDO: Retraso Luz 3 ➔ 4"
+      default: 0.5
+      selector:
+        number:
+          min: 0.0
+          max: 10.0
+          step: 0.1
+          unit_of_measurement: "segundos"
+
+    delay_down_4_3:
+      name: "⏱️ BAJANDO: Retraso Luz 4 ➔ 3"
+      default: 0.5
+      selector:
+        number:
+          min: 0.0
+          max: 10.0
+          step: 0.1
+          unit_of_measurement: "segundos"
+
+    delay_down_3_2:
+      name: "⏱️ BAJANDO: Retraso Luz 3 ➔ 2"
+      default: 0.5
+      selector:
+        number:
+          min: 0.0
+          max: 10.0
+          step: 0.1
+          unit_of_measurement: "segundos"
+
+    delay_down_2_1:
+      name: "⏱️ BAJANDO: Retraso Luz 2 ➔ 1"
+      default: 0.5
+      selector:
+        number:
+          min: 0.0
+          max: 10.0
           step: 0.1
           unit_of_measurement: "segundos"
 
@@ -86,8 +135,6 @@ blueprint:
       selector:
         boolean: {}
 
-# Mode single es vital aquí: evita que si pisas el sensor de salida a mitad de camino, se invierta la secuencia.
-# Simplemente ignorará el segundo sensor para iniciar secuencias, pero SÍ servirá para resetear el timer de apagado.
 mode: single
 
 variables:
@@ -97,31 +144,16 @@ variables:
   v_light_2: !input light_2
   v_light_3: !input light_3
   v_light_4: !input light_4
-  v_delay: !input delay_between
   v_off_delay: !input off_delay
   v_turn_off_mode: !input turn_off_mode
   v_use_sun_night: !input use_sun_night
-
-  # Filtramos cualquier hueco de luz vacío para crear las secuencias limpias
-  up_sequence: >
-    {% set lights = [v_light_1, v_light_2, v_light_3, v_light_4] %}
-    {{ lights | reject('none') | reject('eq', '') | list }}
-  down_sequence: >
-    {% set lights = [v_light_4, v_light_3, v_light_2, v_light_1] %}
-    {{ lights | reject('none') | reject('eq', '') | list }}
   
-  # Seleccionamos la secuencia activa según quién disparó
-  active_sequence: "{{ up_sequence if trigger.id == 'bottom' else down_sequence }}"
-
-  # Seleccionamos la secuencia de apagado según el modo
-  off_sequence: >
-    {% if v_turn_off_mode == 'sequential' %}
-      {{ up_sequence if trigger.id == 'bottom' else down_sequence }}
-    {% elif v_turn_off_mode == 'sequential_reverse' %}
-      {{ down_sequence if trigger.id == 'bottom' else up_sequence }}
-    {% else %}
-      {{ up_sequence }}
-    {% endif %}
+  v_delay_up_1_2: !input delay_up_1_2
+  v_delay_up_2_3: !input delay_up_2_3
+  v_delay_up_3_4: !input delay_up_3_4
+  v_delay_down_4_3: !input delay_down_4_3
+  v_delay_down_3_2: !input delay_down_3_2
+  v_delay_down_2_1: !input delay_down_2_1
 
 trigger:
   - platform: state
@@ -157,7 +189,7 @@ action:
                 target:
                   entity_id: "{{ v_light_1 }}"
               - delay:
-                  seconds: "{{ v_delay }}"
+                  seconds: "{{ v_delay_up_1_2 }}"
           - if:
               - condition: template
                 value_template: "{{ v_light_2 != '' and v_light_2 != none }}"
@@ -166,7 +198,7 @@ action:
                 target:
                   entity_id: "{{ v_light_2 }}"
               - delay:
-                  seconds: "{{ v_delay }}"
+                  seconds: "{{ v_delay_up_2_3 }}"
           - if:
               - condition: template
                 value_template: "{{ v_light_3 != '' and v_light_3 != none }}"
@@ -175,7 +207,7 @@ action:
                 target:
                   entity_id: "{{ v_light_3 }}"
               - delay:
-                  seconds: "{{ v_delay }}"
+                  seconds: "{{ v_delay_up_3_4 }}"
           - if:
               - condition: template
                 value_template: "{{ v_light_4 != '' and v_light_4 != none }}"
@@ -183,6 +215,7 @@ action:
               - service: homeassistant.turn_on
                 target:
                   entity_id: "{{ v_light_4 }}"
+
       - conditions:
           - condition: template
             value_template: "{{ trigger.id == 'top' }}"
@@ -195,7 +228,7 @@ action:
                 target:
                   entity_id: "{{ v_light_4 }}"
               - delay:
-                  seconds: "{{ v_delay }}"
+                  seconds: "{{ v_delay_down_4_3 }}"
           - if:
               - condition: template
                 value_template: "{{ v_light_3 != '' and v_light_3 != none }}"
@@ -204,7 +237,7 @@ action:
                 target:
                   entity_id: "{{ v_light_3 }}"
               - delay:
-                  seconds: "{{ v_delay }}"
+                  seconds: "{{ v_delay_down_3_2 }}"
           - if:
               - condition: template
                 value_template: "{{ v_light_2 != '' and v_light_2 != none }}"
@@ -213,7 +246,7 @@ action:
                 target:
                   entity_id: "{{ v_light_2 }}"
               - delay:
-                  seconds: "{{ v_delay }}"
+                  seconds: "{{ v_delay_down_2_1 }}"
           - if:
               - condition: template
                 value_template: "{{ v_light_1 != '' and v_light_1 != none }}"
@@ -256,7 +289,7 @@ action:
                 target:
                   entity_id: "{{ v_light_1 }}"
               - delay:
-                  seconds: "{{ v_delay }}"
+                  seconds: "{{ v_delay_up_1_2 }}"
           - if:
               - condition: template
                 value_template: "{{ v_light_2 != '' and v_light_2 != none }}"
@@ -265,7 +298,7 @@ action:
                 target:
                   entity_id: "{{ v_light_2 }}"
               - delay:
-                  seconds: "{{ v_delay }}"
+                  seconds: "{{ v_delay_up_2_3 }}"
           - if:
               - condition: template
                 value_template: "{{ v_light_3 != '' and v_light_3 != none }}"
@@ -274,7 +307,7 @@ action:
                 target:
                   entity_id: "{{ v_light_3 }}"
               - delay:
-                  seconds: "{{ v_delay }}"
+                  seconds: "{{ v_delay_up_3_4 }}"
           - if:
               - condition: template
                 value_template: "{{ v_light_4 != '' and v_light_4 != none }}"
@@ -297,7 +330,7 @@ action:
                 target:
                   entity_id: "{{ v_light_4 }}"
               - delay:
-                  seconds: "{{ v_delay }}"
+                  seconds: "{{ v_delay_down_4_3 }}"
           - if:
               - condition: template
                 value_template: "{{ v_light_3 != '' and v_light_3 != none }}"
@@ -306,7 +339,7 @@ action:
                 target:
                   entity_id: "{{ v_light_3 }}"
               - delay:
-                  seconds: "{{ v_delay }}"
+                  seconds: "{{ v_delay_down_3_2 }}"
           - if:
               - condition: template
                 value_template: "{{ v_light_2 != '' and v_light_2 != none }}"
@@ -315,7 +348,7 @@ action:
                 target:
                   entity_id: "{{ v_light_2 }}"
               - delay:
-                  seconds: "{{ v_delay }}"
+                  seconds: "{{ v_delay_down_2_1 }}"
           - if:
               - condition: template
                 value_template: "{{ v_light_1 != '' and v_light_1 != none }}"
