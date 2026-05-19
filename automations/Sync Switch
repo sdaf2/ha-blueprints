@@ -1,136 +1,35 @@
 blueprint:
-  name: MOES ZigBee
-  description: Automate your MOES ZigBee Wireless Scene Switch 4 button remote using ZHA events.
+  name: "Sync Switch"
+  description: >
+    Permite usar varios pulsadores (binary sensors) para controlar una misma luz o grupo de luces.
+    Cada pulsación alterna el estado (on/off) de las luces seleccionadas.
   domain: automation
   input:
-    moes_ts0044:
-      name: Moes TS0044 4 button remote
-      description: Moes TS0044 4 button remote to use
+    push_buttons:
+      name: "🔘 Pulsadores"
+      description: "Selecciona los pulsadores que controlarán la luz."
       selector:
-        device:
-          integration: zha
-          manufacturer: _TZ3000_kfu8zapd
-          model: TS0044
-    button_one_single_press:
-      name: Button 1 (single press)
-      description: Action to run on button 1 single press
-      default: []
+        entity:
+          domain: binary_sensor
+          multiple: true
+
+    target_lights:
+      name: "💡 Luces"
+      description: "Luces o grupos que quieres controlar."
       selector:
-        action: {}
-    button_one_double_press:
-      name: Button 1 (double press)
-      description: Action to run on button 1 double press
-      default: []
-      selector:
-        action: {}
-    button_one_long_press:
-      name: Button 1 (long press)
-      description: Action to run on button 1 long press
-      default: []
-      selector:
-        action: {}
-    button_two_single_press:
-      name: Button 2 (single press)
-      description: Action to run on button 2 single press
-      default: []
-      selector:
-        action: {}
-    button_two_double_press:
-      name: Button 2 (double press)
-      description: Action to run on button 2 double press
-      default: []
-      selector:
-        action: {}
-    button_two_long_press:
-      name: Button 2 (long press)
-      description: Action to run on button 2 long press
-      default: []
-      selector:
-        action: {}
-    button_three_single_press:
-      name: Button 3 (single press)
-      description: Action to run on button 3 single press
-      default: []
-      selector:
-        action: {}
-    button_three_double_press:
-      name: Button 3 (double press)
-      description: Action to run on button 3 double press
-      default: []
-      selector:
-        action: {}
-    button_three_long_press:
-      name: Button 3 (long press)
-      description: Action to run on button 3 long press
-      default: []
-      selector:
-        action: {}
-    button_four_single_press:
-      name: Button 4 (single press)
-      description: Action to run on button 4 single press
-      default: []
-      selector:
-        action: {}
-    button_four_double_press:
-      name: Button 4 (double press)
-      description: Action to run on button 4 double press
-      default: []
-      selector:
-        action: {}
-    button_four_long_press:
-      name: Button 4 (long press)
-      description: Action to run on button 4 long press
-      default: []
-      selector:
-        action: {}
+        target:
+          entity:
+            - domain: light
+            - domain: switch
 
 mode: restart
-max_exceeded: silent
 
 trigger:
-  - platform: event
-    event_type: zha_event
-    event_data:
-      device_id: !input 'moes_ts0044'
+  - platform: state
+    entity_id: !input push_buttons
+    from: "off"
+    to: "on"
 
 action:
-  - variables:
-      command: '{{ trigger.event.data.command }}'
-      endpoint_id: '{{ trigger.event.data.endpoint_id }}'
-  - choose:
-      - conditions:
-          - '{{ command == ''remote_button_short_press'' and endpoint_id == 1 }}'
-        sequence: !input 'button_one_single_press'
-      - conditions:
-          - '{{ command == ''remote_button_double_press'' and endpoint_id == 1 }}'
-        sequence: !input 'button_one_double_press'
-      - conditions:
-          - '{{ command == ''remote_button_long_press'' and endpoint_id == 1 }}'
-        sequence: !input 'button_one_long_press'
-      - conditions:
-          - '{{ command == ''remote_button_short_press'' and endpoint_id == 2 }}'
-        sequence: !input 'button_two_single_press'
-      - conditions:
-          - '{{ command == ''remote_button_double_press'' and endpoint_id == 2 }}'
-        sequence: !input 'button_two_double_press'
-      - conditions:
-          - '{{ command == ''remote_button_long_press'' and endpoint_id == 2 }}'
-        sequence: !input 'button_two_long_press'
-      - conditions:
-          - '{{ command == ''remote_button_short_press'' and endpoint_id == 3 }}'
-        sequence: !input 'button_three_single_press'
-      - conditions:
-          - '{{ command == ''remote_button_double_press'' and endpoint_id == 3 }}'
-        sequence: !input 'button_three_double_press'
-      - conditions:
-          - '{{ command == ''remote_button_long_press'' and endpoint_id == 3 }}'
-        sequence: !input 'button_three_long_press'
-      - conditions:
-          - '{{ command == ''remote_button_short_press'' and endpoint_id == 4 }}'
-        sequence: !input 'button_four_single_press'
-      - conditions:
-          - '{{ command == ''remote_button_double_press'' and endpoint_id == 4 }}'
-        sequence: !input 'button_four_double_press'
-      - conditions:
-          - '{{ command == ''remote_button_long_press'' and endpoint_id == 4 }}'
-        sequence: !input 'button_four_long_press'
+  - service: homeassistant.toggle
+    target: !input target_lights
