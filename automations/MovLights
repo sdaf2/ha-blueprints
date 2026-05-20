@@ -1,5 +1,5 @@
 blueprint:
-  name: "Motion Lights"
+  name: "Motion Lights (Simple & Multiple)"
   description: >
     Control optimizado de luces mediante uno o varios sensores de movimiento.
     Si cualquier sensor detecta movimiento, se enciende (condicionado al sol opcional).
@@ -13,7 +13,6 @@ blueprint:
         entity:
           domain: binary_sensor
           multiple: true
-
     target_lights:
       name: "💡 Luces a controlar"
       selector:
@@ -21,14 +20,12 @@ blueprint:
           entity:
             - domain: light
             - domain: switch
-
     use_sun_night:
       name: "🌙 Solo de Noche"
       description: "Actívalo para que solo funcione si el sol se ha puesto."
       default: false
       selector:
         boolean: {}
-
     on_delay:
       name: "⏳ Retraso al encender"
       description: "Segundos de movimiento continuo necesarios antes de encender."
@@ -38,7 +35,6 @@ blueprint:
           min: 0
           max: 60
           unit_of_measurement: "segundos"
-
     off_delay:
       name: "⏱️ Retraso al apagar"
       description: "Segundos a esperar tras no detectar NINGÚN movimiento."
@@ -48,19 +44,17 @@ blueprint:
           min: 0
           max: 3600
           unit_of_measurement: "segundos"
-
 mode: restart
-
 variables:
   motion_entities: !input motion_entities
   v_use_sun_night: !input use_sun_night
   v_on_delay: !input on_delay
-
 trigger:
   - platform: state
     entity_id: !input motion_entities
     to: "on"
-
+    for:
+      seconds: !input on_delay
 condition:
   - condition: template
     value_template: >
@@ -69,30 +63,15 @@ condition:
       {% else %}
         true
       {% endif %}
-
 action:
-  # Delay de inicio (si aplica)
-  - delay:
-      seconds: "{{ v_on_delay }}"
-  
-  # Verificar si todavía hay movimiento (alguno sigue en 'on')
-  - if:
-      - condition: template
-        value_template: "{{ v_on_delay | float > 0 }}"
-    then:
-      - condition: template
-        value_template: "{{ expand(motion_entities) | selectattr('state', 'eq', 'on') | list | length > 0 }}"
-
   - service: homeassistant.turn_on
     target: !input target_lights
-
   # Esperar a que TODOS los sensores estén en OFF
-  - wait_for_trigger:
-      - platform: template
-        value_template: "{{ expand(motion_entities) | selectattr('state', 'eq', 'on') | list | length == 0 }}"
-        for:
-          seconds: !input off_delay
-    continue_on_timeout: false
-
+  - wait_template: "{{ expand(motion_entities) | selectattr('state', 'eq', 'on') | list | length == 0 }}"
+  
+  # Una vez todos están en OFF, iniciamos la cuenta atrás para apagar.
+  # Si alguien vuelve a moverse durante este tiempo, el trigger "to: on" reiniciará el script completo (mode: restart).
+  - delay:
+      seconds: !input off_delay
   - service: homeassistant.turn_off
     target: !input target_lights
