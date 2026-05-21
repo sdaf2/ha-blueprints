@@ -135,6 +135,16 @@ blueprint:
       selector:
         boolean: {}
 
+    max_time:
+      name: "⏱️ Tiempo máximo de encendido (Seguridad)"
+      description: "Tiempo máximo que las luces pueden permanecer encendidas en caso de que un sensor quede atascado o no se complete el recorrido."
+      default: 120
+      selector:
+        number:
+          min: 10
+          max: 1800
+          unit_of_measurement: "segundos"
+
 mode: single
 
 variables:
@@ -147,6 +157,7 @@ variables:
   v_off_delay: !input off_delay
   v_turn_off_mode: !input turn_off_mode
   v_use_sun_night: !input use_sun_night
+  v_max_time: !input max_time
   
   v_delay_up_1_2: !input delay_up_1_2
   v_delay_up_2_3: !input delay_up_2_3
@@ -255,13 +266,15 @@ action:
                 target:
                   entity_id: "{{ v_light_1 }}"
 
-  # 2. Esperar a que NADIE detecte movimiento
+  # 2. Esperar a que NADIE detecte movimiento o se supere el tiempo máximo
   - wait_for_trigger:
       - platform: template
         value_template: "{{ is_state(v_sensor_bottom, 'off') and is_state(v_sensor_top, 'off') }}"
         for:
           seconds: "{{ v_off_delay }}"
-    continue_on_timeout: false
+    timeout:
+      seconds: "{{ v_max_time }}"
+    continue_on_timeout: true
 
   # 3. Apagado (Escalonado o Todo a la vez)
   - choose:
