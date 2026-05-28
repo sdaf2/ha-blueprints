@@ -1,5 +1,5 @@
 blueprint:
-  name: "Motion Lights"
+  name: "Motion Lights (Simple & Multiple)"
   description: >
     Control optimizado de luces mediante uno o varios sensores de movimiento.
     Si cualquier sensor detecta movimiento, se enciende (condicionado al sol opcional).
@@ -67,14 +67,6 @@ blueprint:
             - device_tracker
           multiple: true
 
-    block_schedule:
-      name: "📅 Horario de bloqueo (Opcional)"
-      description: "Selecciona una entidad de horario (schedule). Las luces NO se encenderán cuando el horario esté activo (on)."
-      default: ""
-      selector:
-        entity:
-          domain: schedule
-
     block_time_start:
       name: "🕒 Hora de inicio del bloqueo (Opcional)"
       description: "Hora a la que empieza el periodo de bloqueo (las luces no se encenderán)."
@@ -97,7 +89,6 @@ variables:
   v_on_delay: !input on_delay
   presence_filter: !input presence_filter
   presence_entities: !input presence_entities
-  block_schedule: !input block_schedule
   block_time_start: !input block_time_start
   block_time_end: !input block_time_end
 
@@ -124,13 +115,6 @@ condition:
         {% else %}
           {{ states('zone.home') | int(0) > 0 }}
         {% endif %}
-      {% else %}
-        true
-      {% endif %}
-  - condition: template
-    value_template: >
-      {% if block_schedule is defined and block_schedule not in [none, '', 'none'] %}
-        {{ not is_state(block_schedule, 'on') }}
       {% else %}
         true
       {% endif %}
