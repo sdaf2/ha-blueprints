@@ -1,5 +1,5 @@
 blueprint:
-  name: "Motion Lights (Simple & Multiple)"
+  name: "Motion Lights"
   description: >
     Control optimizado de luces mediante uno o varios sensores de movimiento.
     Si cualquier sensor detecta movimiento, se enciende (condicionado al sol opcional).
@@ -13,6 +13,7 @@ blueprint:
         entity:
           domain: binary_sensor
           multiple: true
+
     target_lights:
       name: "💡 Luces a controlar"
       selector:
@@ -20,12 +21,14 @@ blueprint:
           entity:
             - domain: light
             - domain: switch
+
     use_sun_night:
       name: "🌙 Solo de Noche"
       description: "Actívalo para que solo funcione si el sol se ha puesto."
       default: false
       selector:
         boolean: {}
+
     on_delay:
       name: "⏳ Retraso al encender"
       description: "Segundos de movimiento continuo necesarios antes de encender."
@@ -35,6 +38,7 @@ blueprint:
           min: 0
           max: 60
           unit_of_measurement: "segundos"
+
     off_delay:
       name: "⏱️ Retraso al apagar"
       description: "Segundos a esperar tras no detectar NINGÚN movimiento."
@@ -44,17 +48,66 @@ blueprint:
           min: 0
           max: 3600
           unit_of_measurement: "segundos"
+
+    presence_filter:
+      name: "👥 Requerir Presencia"
+      description: "Habilita este filtro para que las luces solo se enciendan cuando haya alguien en casa."
+      default: false
+      selector:
+        boolean: {}
+
+    presence_entities:
+      name: "👥 Personas a verificar"
+      description: "Si seleccionas personas, las luces solo se encienden si AL MENOS una de ellas está en casa. Si no seleccionas ninguna (y el filtro general está activo), se comprobará que haya alguien en casa de forma general (usando zone.home > 0)."
+      default: []
+      selector:
+        entity:
+          domain:
+            - person
+            - device_tracker
+          multiple: true
+
+    block_schedule:
+      name: "📅 Horario de bloqueo (Opcional)"
+      description: "Selecciona una entidad de horario (schedule). Las luces NO se encenderán cuando el horario esté activo (on)."
+      default: ""
+      selector:
+        entity:
+          domain: schedule
+
+    block_time_start:
+      name: "🕒 Hora de inicio del bloqueo (Opcional)"
+      description: "Hora a la que empieza el periodo de bloqueo (las luces no se encenderán)."
+      default: ""
+      selector:
+        time: {}
+
+    block_time_end:
+      name: "🕒 Hora de fin del bloqueo (Opcional)"
+      description: "Hora a la que termina el periodo de bloqueo."
+      default: ""
+      selector:
+        time: {}
+
 mode: restart
+
 variables:
   motion_entities: !input motion_entities
   v_use_sun_night: !input use_sun_night
   v_on_delay: !input on_delay
+  presence_filter: !input presence_filter
+  presence_entities: !input presence_entities
+  block_schedule: !input block_schedule
+  block_time_start: !input block_time_start
+  block_time_end: !input block_time_end
+
 trigger:
   - platform: state
     entity_id: !input motion_entities
     to: "on"
     for:
       seconds: !input on_delay
+
 condition:
   - condition: template
     value_template: >
@@ -63,9 +116,41 @@ condition:
       {% else %}
         true
       {% endif %}
+  - condition: template
+    value_template: >
+      {% if presence_filter %}
+        {% if presence_entities is defined and presence_entities not in [none, '', [], 'none'] %}
+          {{ expand(presence_entities) | selectattr('state', 'eq', 'home') | list | length > 0 }}
+        {% else %}
+          {{ states('zone.home') | int(0) > 0 }}
+        {% endif %}
+      {% else %}
+        true
+      {% endif %}
+  - condition: template
+    value_template: >
+      {% if block_schedule is defined and block_schedule not in [none, '', 'none'] %}
+        {{ not is_state(block_schedule, 'on') }}
+      {% else %}
+        true
+      {% endif %}
+  - condition: template
+    value_template: >
+      {% if block_time_start is defined and block_time_start not in [none, ''] and block_time_end is defined and block_time_end not in [none, ''] %}
+        {% set now_time = now().strftime('%H:%M:%S') %}
+        {% if block_time_start <= block_time_end %}
+          {{ not (block_time_start <= now_time and now_time <= block_time_end) }}
+        {% else %}
+          {{ not (block_time_start <= now_time or now_time <= block_time_end) }}
+        {% endif %}
+      {% else %}
+        true
+      {% endif %}
+
 action:
   - service: homeassistant.turn_on
     target: !input target_lights
+
   # Esperar a que TODOS los sensores estén en OFF
   - wait_template: "{{ expand(motion_entities) | selectattr('state', 'eq', 'on') | list | length == 0 }}"
   
@@ -73,5 +158,6 @@ action:
   # Si alguien vuelve a moverse durante este tiempo, el trigger "to: on" reiniciará el script completo (mode: restart).
   - delay:
       seconds: !input off_delay
+
   - service: homeassistant.turn_off
     target: !input target_lights
