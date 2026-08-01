@@ -271,10 +271,7 @@ action:
       is_c2_connected: >-
         {{ c2_val in ['on', 'true', 'Conectado', 'connected'] }}
 
-      # Hay cable si está enchufado el Wallbox o cualquiera de los coches
       any_cable_connected: "{{ is_wb_connected or is_c1_connected or is_c2_connected }}"
-      
-      # Si hay coche integrado en HA enchufado (Tesla), actuamos sobre el coche. Si no, actuamos sobre Wallbox (Invitado).
       has_known_car_connected: "{{ is_c1_connected or is_c2_connected }}"
       is_guest_car: "{{ is_wb_connected and not has_known_car_connected }}"
 
@@ -299,7 +296,7 @@ action:
               available_grid_margin_w: "{{ [ (effective_house_limit_w - grid_power_w), 0 ] | max }}"
               max_safe_amps: "{{ (available_grid_margin_w / 230) | int(0) }}"
 
-          # --- GESTIÓN DE MODOS Y EJECUCIÓN (COCHE INTEGRADO VS COCHE INVITADO) ---
+          # --- GESTIÓN DE MODOS Y EJECUCIÓN ---
           - choose:
               # -------------------------------------------------------------
               # MODO 1: MANUAL
@@ -312,7 +309,6 @@ action:
                       target_amps: "{{ [ (states(var_amp_manual) | float(16)), max_safe_amps ] | min }}"
                       final_amps: "{{ [ [target_amps, 6] | max, 32 ] | min }}"
                   - choose:
-                      # Si es Coche Integrado (ej. Tesla): Wallbox a 32A y regular en el Coche
                       - conditions:
                           - condition: template
                             value_template: "{{ has_known_car_connected }}"
@@ -331,14 +327,12 @@ action:
                                 data: { value: "{{ final_amps }}" }
                               - service: switch.turn_on
                                 target: !input car_1_switch
-
-                      # Si es Coche Invitado (amigo): Regular directamente en el Wallbox Raedian
-                      default:
-                        - service: number.set_value
-                          target: !input wallbox_current_number
-                          data: { value: "{{ final_amps }}" }
-                        - service: switch.turn_on
-                          target: !input wallbox_switch
+                    default:
+                      - service: number.set_value
+                        target: !input wallbox_current_number
+                        data: { value: "{{ final_amps }}" }
+                      - service: switch.turn_on
+                        target: !input wallbox_switch
 
               # -------------------------------------------------------------
               # MODO 2: NOCTURNO / FINDE
@@ -380,12 +374,12 @@ action:
                                         data: { value: "{{ final_amps }}" }
                                       - service: switch.turn_on
                                         target: !input car_1_switch
-                              default:
-                                - service: number.set_value
-                                  target: !input wallbox_current_number
-                                  data: { value: "{{ final_amps }}" }
-                                - service: switch.turn_on
-                                  target: !input wallbox_switch
+                            default:
+                              - service: number.set_value
+                                target: !input wallbox_current_number
+                                data: { value: "{{ final_amps }}" }
+                              - service: switch.turn_on
+                                target: !input wallbox_switch
                     default:
                       - service: switch.turn_off
                         target: !input wallbox_switch
@@ -424,7 +418,6 @@ action:
                       calculated_amps: "{{ [ raw_calculated_amps, max_safe_amps ] | min }}"
                       has_enough_sun: "{{ calculated_amps >= 6 }}"
 
-                      # REPARTO MULTI-VEHÍCULO
                       estrategia_val: "{{ states(var_estrategia) if var_estrategia != {} else 'Equitativo (50/50)' }}"
                       pct_c1: "{{ (states(var_p_coche1) | float(50)) / 100.0 if var_p_coche1 != {} else 0.5 }}"
                       
@@ -447,7 +440,6 @@ action:
                         {% endif %}
 
                   - choose:
-                      # CASO A: Hay sol y condiciones OK -> Activar Carga Solar
                       - conditions:
                           - condition: template
                             value_template: "{{ not has_priority_block }}"
@@ -457,7 +449,6 @@ action:
                             value_template: "{{ has_enough_sun }}"
                         sequence:
                           - choose:
-                              # A.1 SI HAY COCHE INTEGRADO (Tesla)
                               - conditions:
                                   - condition: template
                                     value_template: "{{ has_known_car_connected }}"
@@ -487,17 +478,13 @@ action:
                                           value: "{{ [ [amps_c2 | float(6), 6] | max, 32 ] | min }}"
                                       - service: switch.turn_on
                                         target: !input car_2_switch
-
-                              # A.2 SI ES COCHE INVITADO (Sin API) -> Regular directamente el Wallbox Raedian
-                              default:
-                                - service: number.set_value
-                                  target: !input wallbox_current_number
-                                  data:
-                                    value: "{{ [ [calculated_amps, 6] | max, 32 ] | min }}"
-                                - service: switch.turn_on
-                                  target: !input wallbox_switch
-
-                    # CASO B: Sin sol suficiente -> Parar Carga
+                            default:
+                              - service: number.set_value
+                                target: !input wallbox_current_number
+                                data:
+                                  value: "{{ [ [calculated_amps, 6] | max, 32 ] | min }}"
+                              - service: switch.turn_on
+                                target: !input wallbox_switch
                     default:
                       - service: switch.turn_off
                         target: !input wallbox_switch
@@ -534,7 +521,7 @@ action:
                   - service: switch.turn_off
                     target: !input car_1_switch
 
-    # SI NO HAY NINGÚN CABLE CONECTADO (Ni Wallbox ni Coches): Apagar todo
+    # SI NO HAY NINGÚN CABLE CONECTADO: Apagar todo
     default:
       - service: switch.turn_off
         target: !input wallbox_switch
