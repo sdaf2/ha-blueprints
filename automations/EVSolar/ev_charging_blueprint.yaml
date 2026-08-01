@@ -2,13 +2,13 @@ blueprint:
   name: "EV Smart"
   description: >
     Control de carga avanzado para VE en 4 modos (Apagado, Manual, Tarifa Nocturna/Finde, Solar).
-    Optimizado para inversor GoodWe (Meter 2 Active Power, PV Power, Battery SoC, Battery Power) y cargador Raedian/Tesla.
-    Incluye temporización anti-flapping (duración mínima y retardo de reconexión), suavizado de potencia y control de prioridades.
+    Estrategia Tesla-Control: Mantiene el Wallbox habilitado a 32A al conectar el cable, 
+    y delega el inicio/parada y la regulación de amperios dinámicos directamente en el vehículo (Tesla).
   domain: automation
   input:
     cable_sensor:
       name: "🔌 Sensor de Cable Conectado"
-      description: "Sensor del cargador Raedian o Tesla que indica si el cable está enchufado."
+      description: "Sensor del cargador o del coche (Tesla) que indica si el cable está enchufado."
       selector:
         entity:
           domain: [sensor, binary_sensor]
@@ -44,9 +44,43 @@ blueprint:
         entity:
           domain: input_datetime
 
+    wallbox_switch:
+      name: "🔌 Switch del Cargador (Wallbox Raedian)"
+      description: "Switch del Wallbox (se mantendrá activado a 32A al detectar cable)."
+      selector:
+        target:
+          entity:
+            - domain: switch
+
+    wallbox_current_number:
+      name: "⚙️ Amperaje Máximo del Cargador (Wallbox Raedian)"
+      description: "Amperaje del Wallbox (se fijará en 32A)."
+      default: {}
+      selector:
+        target:
+          entity:
+            - domain: number
+
+    car_switch:
+      name: "🚗 Control Carga del Vehículo (Tesla Switch/Button)"
+      description: "Entidad del vehículo para iniciar/detener la carga."
+      selector:
+        target:
+          entity:
+            - domain: switch
+            - domain: button
+
+    car_current_number:
+      name: "⚙️ Amperaje del Vehículo (Tesla Current Number)"
+      description: "Entidad number que ajusta el amperaje de carga directamente en el coche."
+      selector:
+        target:
+          entity:
+            - domain: number
+
     net_power_sensor:
       name: "⚡ Sensor Potencia de Red / Meter (W)"
-      description: "Sensor de consumo de red (ej. Meter 2 Active Power). Debe ser NEGATIVO cuando exporta a red."
+      description: "Sensor de red GoodWe (Meter 2 Active Power). Negativo cuando exporta a red."
       default: sensor.meter_2_active_power
       selector:
         entity:
@@ -55,7 +89,6 @@ blueprint:
 
     pv_power_sensor:
       name: "☀️ Sensor Producción Solar PV (W)"
-      description: "Sensor de generación fotovoltaica (ej. PV Power de GoodWe)."
       default: sensor.pv_power
       selector:
         entity:
@@ -64,7 +97,6 @@ blueprint:
 
     battery_soc_sensor:
       name: "🔋 Sensor SoC Batería Casa (%)"
-      description: "Sensor de porcentaje de batería (ej. Battery State of Charge de GoodWe)."
       default: sensor.battery_state_of_charge
       selector:
         entity:
@@ -73,7 +105,6 @@ blueprint:
 
     battery_power_sensor:
       name: "🔋 Sensor Potencia Batería Casa (W)"
-      description: "Potencia de carga/descarga de la batería (ej. Battery Power de GoodWe). Negativo = cargando."
       default: sensor.battery_power
       selector:
         entity:
@@ -82,14 +113,12 @@ blueprint:
 
     min_battery_soc_input:
       name: "🔋 Mínimo SoC Batería Casa"
-      description: "input_number con el % mínimo de batería doméstica antes de ceder excedentes al EV."
       selector:
         entity:
           domain: input_number
 
     priority_block_entity:
       name: "🚫 Bloqueo por Dispositivos Prioritarios (Opcional)"
-      description: "Entidad (ej. Termo / Aerotermia) que si está activa bloquea la carga solar del EV."
       default: []
       selector:
         entity:
@@ -112,18 +141,6 @@ blueprint:
         entity:
           domain: input_number
 
-    charger_switch_entity:
-      name: "🔌 Switch del Cargador (Wallbox Raedian / Tesla)"
-      selector:
-        entity:
-          domain: [switch, input_boolean]
-
-    charger_current_entity:
-      name: "⚙️ Entidad Control de Amperaje (Raedian / Tesla)"
-      selector:
-        entity:
-          domain: number
-
 mode: restart
 
 variables:
@@ -133,8 +150,11 @@ variables:
   var_amp_nocturna: !input amperios_nocturna_input
   var_h_inicio: !input hora_inicio_nocturna_input
   var_h_fin: !input hora_fin_nocturna_input
+  var_wb_sw: !input wallbox_switch
+  var_wb_num: !input wallbox_current_number
+  var_car_sw: !input car_switch
+  var_car_num: !input car_current_number
   var_net_power: !input net_power_sensor
-  var_pv_power: !input pv_power_sensor
   var_soc: !input battery_soc_sensor
   var_bat_power: !input battery_power_sensor
   var_min_soc: !input min_battery_soc_input
@@ -142,8 +162,6 @@ variables:
   var_min_charge_m: !input min_charge_time_input
   var_stop_delay_m: !input stop_delay_input
   var_amp_delay_s: !input amp_change_delay_input
-  var_sw: !input charger_switch_entity
-  var_num_curr: !input charger_current_entity
 
 trigger:
   - platform: state
@@ -174,7 +192,19 @@ action:
                  is_state(var_cable, 'connected') or 
                  is_state(var_cable, 'true') }}
         sequence:
-          # 2. SELECTOR DE MODOS DE CARGA
+          # --- GESTIÓN DEL WALLBOX: Habilitado a 32A siempre que haya cable ---
+          - service: switch.turn_on
+            target: !input wallbox_switch
+          - if:
+              - condition: template
+                value_template: "{{ var_wb_num != {} }}"
+            then:
+              - service: number.set_value
+                target: !input wallbox_current_number
+                data:
+                  value: 32
+
+          # --- GESTIÓN DE MODOS DIRECTAMENTE EN EL VEHÍCULO (TESLA) ---
           - choose:
               # -------------------------------------------------------------
               # MODO 1: MANUAL
@@ -184,13 +214,11 @@ action:
                     value_template: "{{ is_state(var_modo, 'Manual') }}"
                 sequence:
                   - service: number.set_value
-                    target:
-                      entity_id: !input charger_current_entity
+                    target: !input car_current_number
                     data:
                       value: "{{ states(var_amp_manual) | float(16) }}"
                   - service: switch.turn_on
-                    target:
-                      entity_id: !input charger_switch_entity
+                    target: !input car_switch
 
               # -------------------------------------------------------------
               # MODO 2: NOCTURNO / FINDE
@@ -211,29 +239,30 @@ action:
                               {{ es_finde or en_tramo_nocturno }}
                         sequence:
                           - service: number.set_value
-                            target:
-                              entity_id: !input charger_current_entity
+                            target: !input car_current_number
                             data:
                               value: "{{ states(var_amp_nocturna) | float(16) }}"
                           - service: switch.turn_on
-                            target:
-                              entity_id: !input charger_switch_entity
+                            target: !input car_switch
                     default:
                       - service: switch.turn_off
-                        target:
-                          entity_id: !input charger_switch_entity
+                        target: !input car_switch
 
               # -------------------------------------------------------------
-              # MODO 3: SOLAR (GOODWE METER 2 + BATTERY POWER + HISTERESIS)
+              # MODO 3: SOLAR (EXCEDENTES GESTIONADOS EN EL TESLA)
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
                     value_template: "{{ is_state(var_modo, 'Solar') }}"
                 sequence:
                   - variables:
-                      sw_state: "{{ states(var_sw) }}"
-                      sw_last_changed: "{{ (now() - states[var_sw].last_changed).total_seconds() if states[var_sw] is defined and states[var_sw].last_changed is defined else 99999 }}"
-                      curr_last_changed: "{{ (now() - states[var_num_curr].last_changed).total_seconds() if states[var_num_curr] is defined and states[var_num_curr].last_changed is defined else 99999 }}"
+                      car_sw_entity: >-
+                        {{ var_car_sw.entity_id[0] if var_car_sw.entity_id is defined and var_car_sw.entity_id is list else (var_car_sw.entity_id if var_car_sw.entity_id is defined else var_car_sw) }}
+                      car_num_entity: >-
+                        {{ var_car_num.entity_id[0] if var_car_num.entity_id is defined and var_car_num.entity_id is list else (var_car_num.entity_id if var_car_num.entity_id is defined else var_car_num) }}
+                      car_state: "{{ states(car_sw_entity) }}"
+                      car_last_changed: "{{ (now() - states[car_sw_entity].last_changed).total_seconds() if states[car_sw_entity] is defined and states[car_sw_entity].last_changed is defined else 99999 }}"
+                      num_last_changed: "{{ (now() - states[car_num_entity].last_changed).total_seconds() if states[car_num_entity] is defined and states[car_num_entity].last_changed is defined else 99999 }}"
                       min_charge_sec: "{{ (states(var_min_charge_m) | float(5)) * 60 }}"
                       stop_delay_sec: "{{ (states(var_stop_delay_m) | float(3)) * 60 }}"
                       amp_delay_sec: "{{ states(var_amp_delay_s) | float(60) }}"
@@ -246,10 +275,7 @@ action:
                       net_power_w: "{{ states(var_net_power) | float(0) }}"
                       bat_power_w: "{{ states(var_bat_power) | float(0) if var_bat_power != [] else 0 }}"
                       
-                      # Excedente exportado a red (Meter 2 Active Power es negativo cuando exporta)
                       exported_surplus_w: "{{ (net_power_w * -1) if net_power_w < 0 else 0 }}"
-                      
-                      # Si la batería doméstica ya superó el SoC mínimo y se está cargando (bat_power < 0), sumar esa potencia al EV
                       battery_charge_surplus_w: "{{ (bat_power_w * -1) if (soc_ok and bat_power_w < 0) else 0 }}"
                       
                       total_available_w: "{{ exported_surplus_w + battery_charge_surplus_w }}"
@@ -257,7 +283,7 @@ action:
                       has_enough_sun: "{{ calculated_amps >= 6 }}"
 
                   - choose:
-                      # CASO A: Iniciar o mantener carga solar
+                      # CASO A: Activar o mantener carga solar en Tesla
                       - conditions:
                           - condition: template
                             value_template: "{{ not has_priority_block }}"
@@ -265,35 +291,32 @@ action:
                             value_template: "{{ soc_ok }}"
                           - condition: template
                             value_template: >-
-                              {{ has_enough_sun or (sw_state == 'on' and sw_last_changed < min_charge_sec) }}
+                              {{ has_enough_sun or (car_state == 'on' and car_last_changed < min_charge_sec) }}
                           - condition: template
                             value_template: >-
-                              {{ sw_state == 'on' or sw_last_changed >= stop_delay_sec }}
+                              {{ car_state == 'on' or car_last_changed >= stop_delay_sec }}
                         sequence:
                           - choose:
                               - conditions:
                                   - condition: template
-                                    value_template: "{{ curr_last_changed >= amp_delay_sec }}"
+                                    value_template: "{{ num_last_changed >= amp_delay_sec }}"
                                 sequence:
                                   - service: number.set_value
-                                    target:
-                                      entity_id: !input charger_current_entity
+                                    target: !input car_current_number
                                     data:
                                       value: "{{ [ [calculated_amps, 6] | max, 32 ] | min }}"
                           - service: switch.turn_on
-                            target:
-                              entity_id: !input charger_switch_entity
+                            target: !input car_switch
 
-                    # CASO B: Parar carga solar
+                    # CASO B: Parar carga en Tesla
                     default:
                       - choose:
                           - conditions:
                               - condition: template
-                                value_template: "{{ sw_state == 'off' or sw_last_changed >= min_charge_sec }}"
+                                value_template: "{{ car_state == 'off' or car_last_changed >= min_charge_sec }}"
                             sequence:
                               - service: switch.turn_off
-                                target:
-                                  entity_id: !input charger_switch_entity
+                                target: !input car_switch
 
               # -------------------------------------------------------------
               # MODO 4: APAGADO
@@ -303,16 +326,15 @@ action:
                     value_template: "{{ is_state(var_modo, 'Apagado') }}"
                 sequence:
                   - service: switch.turn_off
-                    target:
-                      entity_id: !input charger_switch_entity
+                    target: !input car_switch
 
             default:
               - service: switch.turn_off
-                target:
-                  entity_id: !input charger_switch_entity
+                target: !input car_switch
 
-    # SI NO HAY CABLE CONECTADO: Apagar cargador
+    # SI NO HAY CABLE CONECTADO: Apagar Tesla y apagado de seguridad del Wallbox
     default:
       - service: switch.turn_off
-        target:
-          entity_id: !input charger_switch_entity
+        target: !input car_switch
+      - service: switch.turn_off
+        target: !input wallbox_switch
