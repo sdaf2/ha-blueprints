@@ -277,110 +277,238 @@ action:
 
   # 2. FILTRO GENERAL DE CABLE
   - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ any_cable_connected }}"
-        sequence:
-          # --- CÁLCULO DE PROTECCIÓN DE POTENCIA DINÁMICA (10 kW vs 3.5 kW) ---
-          - variables:
-              pv_w: "{{ states(var_pv_power) | float(0) }}"
-              soc_val: "{{ states(var_soc) | float(0) }}"
-              has_energy_support: "{{ pv_w > 100 or soc_val > 10 }}"
-              
-              limit_combined_w: "{{ states(var_max_house_w) | float(10000) if var_max_house_w != {} else 10000 }}"
-              limit_grid_only_w: "{{ states(var_max_grid_w) | float(3500) if var_max_grid_w != {} else 3500 }}"
-              
-              effective_house_limit_w: "{{ limit_combined_w if has_energy_support else limit_grid_only_w }}"
-              grid_power_w: "{{ states(var_net_power) | float(0) }}"
-              
-              available_grid_margin_w: "{{ [ (effective_house_limit_w - grid_power_w), 0 ] | max }}"
-              max_safe_amps: "{{ (available_grid_margin_w / 230) | int(0) }}"
+      options:
+        - conditions:
+            - condition: template
+              value_template: "{{ any_cable_connected }}"
+          sequence:
+            # --- CÁLCULO DE PROTECCIÓN DE POTENCIA DINÁMICA (10 kW vs 3.5 kW) ---
+            - variables:
+                pv_w: "{{ states(var_pv_power) | float(0) }}"
+                soc_val: "{{ states(var_soc) | float(0) }}"
+                has_energy_support: "{{ pv_w > 100 or soc_val > 10 }}"
+                
+                limit_combined_w: "{{ states(var_max_house_w) | float(10000) if var_max_house_w != {} else 10000 }}"
+                limit_grid_only_w: "{{ states(var_max_grid_w) | float(3500) if var_max_grid_w != {} else 3500 }}"
+                
+                effective_house_limit_w: "{{ limit_combined_w if has_energy_support else limit_grid_only_w }}"
+                grid_power_w: "{{ states(var_net_power) | float(0) }}"
+                
+                available_grid_margin_w: "{{ [ (effective_house_limit_w - grid_power_w), 0 ] | max }}"
+                max_safe_amps: "{{ (available_grid_margin_w / 230) | int(0) }}"
 
-          # --- GESTIÓN DE MODOS Y EJECUCIÓN ---
-          - choose:
-              # -------------------------------------------------------------
-              # MODO 1: MANUAL
-              # -------------------------------------------------------------
-              - conditions:
-                  - condition: template
-                    value_template: "{{ is_state(var_modo, 'Manual') }}"
-                sequence:
-                  - variables:
-                      target_amps: "{{ [ (states(var_amp_manual) | float(16)), max_safe_amps ] | min }}"
-                      final_amps: "{{ [ [target_amps, 6] | max, 32 ] | min }}"
-                  - choose:
-                      - conditions:
-                          - condition: template
-                            value_template: "{{ has_known_car_connected }}"
-                        sequence:
-                          - service: switch.turn_on
-                            target: !input wallbox_switch
-                          - service: number.set_value
-                            target: !input wallbox_current_number
-                            data: { value: 32 }
-                          - if:
-                              - condition: template
-                                value_template: "{{ is_c1_connected and var_c1_num != {} }}"
-                            then:
-                              - service: number.set_value
-                                target: !input car_1_current_number
-                                data: { value: "{{ final_amps }}" }
-                              - service: switch.turn_on
-                                target: !input car_1_switch
-                    default:
-                      - service: number.set_value
-                        target: !input wallbox_current_number
-                        data: { value: "{{ final_amps }}" }
-                      - service: switch.turn_on
-                        target: !input wallbox_switch
+            # --- GESTIÓN DE MODOS Y EJECUCIÓN ---
+            - choose:
+                options:
+                  # -------------------------------------------------------------
+                  # MODO 1: MANUAL
+                  # -------------------------------------------------------------
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ is_state(var_modo, 'Manual') }}"
+                    sequence:
+                      - variables:
+                          target_amps: "{{ [ (states(var_amp_manual) | float(16)), max_safe_amps ] | min }}"
+                          final_amps: "{{ [ [target_amps, 6] | max, 32 ] | min }}"
+                      - choose:
+                          options:
+                            - conditions:
+                                - condition: template
+                                  value_template: "{{ has_known_car_connected }}"
+                              sequence:
+                                - service: switch.turn_on
+                                  target: !input wallbox_switch
+                                - service: number.set_value
+                                  target: !input wallbox_current_number
+                                  data: { value: 32 }
+                                - if:
+                                    - condition: template
+                                      value_template: "{{ is_c1_connected and var_c1_num != {} }}"
+                                  then:
+                                    - service: number.set_value
+                                      target: !input car_1_current_number
+                                      data: { value: "{{ final_amps }}" }
+                                    - service: switch.turn_on
+                                      target: !input car_1_switch
+                          default:
+                            - service: number.set_value
+                              target: !input wallbox_current_number
+                              data: { value: "{{ final_amps }}" }
+                            - service: switch.turn_on
+                              target: !input wallbox_switch
 
-              # -------------------------------------------------------------
-              # MODO 2: NOCTURNO / FINDE
-              # -------------------------------------------------------------
-              - conditions:
-                  - condition: template
-                    value_template: "{{ is_state(var_modo, 'Nocturno / Finde') }}"
-                sequence:
-                  - choose:
-                      - conditions:
-                          - condition: template
-                            value_template: >-
-                              {% set es_finde = now().weekday() in [5, 6] %}
-                              {% set t_now = now().strftime('%H:%M:%S') %}
-                              {% set t_start = states(var_h_inicio) %}
-                              {% set t_end = states(var_h_fin) %}
-                              {% set en_tramo_nocturno = (t_now >= t_start or t_now <= t_end) if (t_start > t_end) else (t_now >= t_start and t_now <= t_end) %}
-                              {{ es_finde or en_tramo_nocturno }}
-                        sequence:
-                          - variables:
-                              target_amps: "{{ [ (states(var_amp_nocturna) | float(16)), max_safe_amps ] | min }}"
-                              final_amps: "{{ [ [target_amps, 6] | max, 32 ] | min }}"
-                          - choose:
-                              - conditions:
-                                  - condition: template
-                                    value_template: "{{ has_known_car_connected }}"
-                                sequence:
-                                  - service: switch.turn_on
-                                    target: !input wallbox_switch
-                                  - service: number.set_value
-                                    target: !input wallbox_current_number
-                                    data: { value: 32 }
-                                  - if:
-                                      - condition: template
-                                        value_template: "{{ is_c1_connected and var_c1_num != {} }}"
-                                    then:
+                  # -------------------------------------------------------------
+                  # MODO 2: NOCTURNO / FINDE
+                  # -------------------------------------------------------------
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ is_state(var_modo, 'Nocturno / Finde') }}"
+                    sequence:
+                      - choose:
+                          options:
+                            - conditions:
+                                - condition: template
+                                  value_template: >-
+                                    {% set es_finde = now().weekday() in [5, 6] %}
+                                    {% set t_now = now().strftime('%H:%M:%S') %}
+                                    {% set t_start = states(var_h_inicio) %}
+                                    {% set t_end = states(var_h_fin) %}
+                                    {% set en_tramo_nocturno = (t_now >= t_start or t_now <= t_end) if (t_start > t_end) else (t_now >= t_start and t_now <= t_end) %}
+                                    {{ es_finde or en_tramo_nocturno }}
+                              sequence:
+                                - variables:
+                                    target_amps: "{{ [ (states(var_amp_nocturna) | float(16)), max_safe_amps ] | min }}"
+                                    final_amps: "{{ [ [target_amps, 6] | max, 32 ] | min }}"
+                                - choose:
+                                    options:
+                                      - conditions:
+                                          - condition: template
+                                            value_template: "{{ has_known_car_connected }}"
+                                        sequence:
+                                          - service: switch.turn_on
+                                            target: !input wallbox_switch
+                                          - service: number.set_value
+                                            target: !input wallbox_current_number
+                                            data: { value: 32 }
+                                          - if:
+                                              - condition: template
+                                                value_template: "{{ is_c1_connected and var_c1_num != {} }}"
+                                            then:
+                                              - service: number.set_value
+                                                target: !input car_1_current_number
+                                                data: { value: "{{ final_amps }}" }
+                                              - service: switch.turn_on
+                                                target: !input car_1_switch
+                                    default:
                                       - service: number.set_value
-                                        target: !input car_1_current_number
+                                        target: !input wallbox_current_number
                                         data: { value: "{{ final_amps }}" }
                                       - service: switch.turn_on
-                                        target: !input car_1_switch
-                            default:
-                              - service: number.set_value
-                                target: !input wallbox_current_number
-                                data: { value: "{{ final_amps }}" }
-                              - service: switch.turn_on
-                                target: !input wallbox_switch
-                    default:
+                                        target: !input wallbox_switch
+                          default:
+                            - service: switch.turn_off
+                              target: !input wallbox_switch
+                            - if:
+                                - condition: template
+                                  value_template: "{{ var_c1_sw != {} }}"
+                              then:
+                                - service: switch.turn_off
+                                  target: !input car_1_switch
+
+                  # -------------------------------------------------------------
+                  # MODO 3: SOLAR
+                  # -------------------------------------------------------------
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ is_state(var_modo, 'Solar') }}"
+                    sequence:
+                      - variables:
+                          min_charge_sec: "{{ (states(var_min_charge_m) | float(5)) * 60 }}"
+                          stop_delay_sec: "{{ (states(var_stop_delay_m) | float(3)) * 60 }}"
+                          amp_delay_sec: "{{ states(var_amp_delay_s) | float(60) }}"
+                          has_priority_block: "{{ var_prio_block != [] and is_state(var_prio_block, 'on') }}"
+                          
+                          current_soc: "{{ states(var_soc) | float(0) }}"
+                          min_soc_req: "{{ states(var_min_soc) | float(80) }}"
+                          soc_ok: "{{ current_soc >= min_soc_req }}"
+                          
+                          net_power_w: "{{ states(var_net_power) | float(0) }}"
+                          bat_power_w: "{{ states(var_bat_power) | float(0) if var_bat_power != [] else 0 }}"
+                          
+                          exported_surplus_w: "{{ (net_power_w * -1) if net_power_w < 0 else 0 }}"
+                          battery_charge_surplus_w: "{{ (bat_power_w * -1) if (soc_ok and bat_power_w < 0) else 0 }}"
+                          
+                          total_available_w: "{{ exported_surplus_w + battery_charge_surplus_w }}"
+                          raw_calculated_amps: "{{ (total_available_w / 230) | int(0) }}"
+                          calculated_amps: "{{ [ raw_calculated_amps, max_safe_amps ] | min }}"
+                          has_enough_sun: "{{ calculated_amps >= 6 }}"
+
+                          estrategia_val: "{{ states(var_estrategia) if var_estrategia != {} else 'Equitativo (50/50)' }}"
+                          pct_c1: "{{ (states(var_p_coche1) | float(50)) / 100.0 if var_p_coche1 != {} else 0.5 }}"
+                          
+                          amps_c1: >-
+                            {% if estrategia_val == 'Prioridad (Coche 1)' %}
+                              {{ calculated_amps }}
+                            {% elif estrategia_val == 'Porcentaje Personalizado' %}
+                              {{ (calculated_amps * pct_c1) | int(0) }}
+                            {% else %}
+                              {{ (calculated_amps / 2) | int(0) }}
+                            {% endif %}
+
+                          amps_c2: >-
+                            {% if estrategia_val == 'Prioridad (Coche 1)' %}
+                              {{ [ (calculated_amps - (amps_c1 | int)), 0 ] | max }}
+                            {% elif estrategia_val == 'Porcentaje Personalizado' %}
+                              {{ (calculated_amps * (1 - pct_c1)) | int(0) }}
+                            {% else %}
+                              {{ (calculated_amps / 2) | int(0) }}
+                            {% endif %}
+
+                      - choose:
+                          options:
+                            - conditions:
+                                - condition: template
+                                  value_template: "{{ not has_priority_block }}"
+                                - condition: template
+                                  value_template: "{{ soc_ok }}"
+                                - condition: template
+                                  value_template: "{{ has_enough_sun }}"
+                              sequence:
+                                - choose:
+                                    options:
+                                      - conditions:
+                                          - condition: template
+                                            value_template: "{{ has_known_car_connected }}"
+                                        sequence:
+                                          - service: switch.turn_on
+                                            target: !input wallbox_switch
+                                          - service: number.set_value
+                                            target: !input wallbox_current_number
+                                            data: { value: 32 }
+                                          - if:
+                                              - condition: template
+                                                value_template: "{{ is_c1_connected and var_c1_num != {} }}"
+                                            then:
+                                              - service: number.set_value
+                                                target: !input car_1_current_number
+                                                data:
+                                                  value: "{{ [ [amps_c1 | float(6), 6] | max, 32 ] | min }}"
+                                              - service: switch.turn_on
+                                                target: !input car_1_switch
+                                          - if:
+                                              - condition: template
+                                                value_template: "{{ is_c2_connected and var_c2_num != {} and (amps_c2 | float(0)) >= 6 }}"
+                                            then:
+                                              - service: number.set_value
+                                                target: !input car_2_current_number
+                                                data:
+                                                  value: "{{ [ [amps_c2 | float(6), 6] | max, 32 ] | min }}"
+                                              - service: switch.turn_on
+                                                target: !input car_2_switch
+                                    default:
+                                      - service: number.set_value
+                                        target: !input wallbox_current_number
+                                        data:
+                                          value: "{{ [ [calculated_amps, 6] | max, 32 ] | min }}"
+                                      - service: switch.turn_on
+                                        target: !input wallbox_switch
+                          default:
+                            - service: switch.turn_off
+                              target: !input wallbox_switch
+                            - if:
+                                - condition: template
+                                  value_template: "{{ var_c1_sw != {} }}"
+                              then:
+                                - service: switch.turn_off
+                                  target: !input car_1_switch
+
+                  # -------------------------------------------------------------
+                  # MODO 4: APAGADO
+                  # -------------------------------------------------------------
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ is_state(var_modo, 'Apagado') }}"
+                    sequence:
                       - service: switch.turn_off
                         target: !input wallbox_switch
                       - if:
@@ -390,118 +518,7 @@ action:
                           - service: switch.turn_off
                             target: !input car_1_switch
 
-              # -------------------------------------------------------------
-              # MODO 3: SOLAR (EXCEDENTES MONOFÁSICOS + COCHE INTEGRADO / INVITADO)
-              # -------------------------------------------------------------
-              - conditions:
-                  - condition: template
-                    value_template: "{{ is_state(var_modo, 'Solar') }}"
-                sequence:
-                  - variables:
-                      min_charge_sec: "{{ (states(var_min_charge_m) | float(5)) * 60 }}"
-                      stop_delay_sec: "{{ (states(var_stop_delay_m) | float(3)) * 60 }}"
-                      amp_delay_sec: "{{ states(var_amp_delay_s) | float(60) }}"
-                      has_priority_block: "{{ var_prio_block != [] and is_state(var_prio_block, 'on') }}"
-                      
-                      current_soc: "{{ states(var_soc) | float(0) }}"
-                      min_soc_req: "{{ states(var_min_soc) | float(80) }}"
-                      soc_ok: "{{ current_soc >= min_soc_req }}"
-                      
-                      net_power_w: "{{ states(var_net_power) | float(0) }}"
-                      bat_power_w: "{{ states(var_bat_power) | float(0) if var_bat_power != [] else 0 }}"
-                      
-                      exported_surplus_w: "{{ (net_power_w * -1) if net_power_w < 0 else 0 }}"
-                      battery_charge_surplus_w: "{{ (bat_power_w * -1) if (soc_ok and bat_power_w < 0) else 0 }}"
-                      
-                      total_available_w: "{{ exported_surplus_w + battery_charge_surplus_w }}"
-                      raw_calculated_amps: "{{ (total_available_w / 230) | int(0) }}"
-                      calculated_amps: "{{ [ raw_calculated_amps, max_safe_amps ] | min }}"
-                      has_enough_sun: "{{ calculated_amps >= 6 }}"
-
-                      estrategia_val: "{{ states(var_estrategia) if var_estrategia != {} else 'Equitativo (50/50)' }}"
-                      pct_c1: "{{ (states(var_p_coche1) | float(50)) / 100.0 if var_p_coche1 != {} else 0.5 }}"
-                      
-                      amps_c1: >-
-                        {% if estrategia_val == 'Prioridad (Coche 1)' %}
-                          {{ calculated_amps }}
-                        {% elif estrategia_val == 'Porcentaje Personalizado' %}
-                          {{ (calculated_amps * pct_c1) | int(0) }}
-                        {% else %}
-                          {{ (calculated_amps / 2) | int(0) }}
-                        {% endif %}
-
-                      amps_c2: >-
-                        {% if estrategia_val == 'Prioridad (Coche 1)' %}
-                          {{ [ (calculated_amps - (amps_c1 | int)), 0 ] | max }}
-                        {% elif estrategia_val == 'Porcentaje Personalizado' %}
-                          {{ (calculated_amps * (1 - pct_c1)) | int(0) }}
-                        {% else %}
-                          {{ (calculated_amps / 2) | int(0) }}
-                        {% endif %}
-
-                  - choose:
-                      - conditions:
-                          - condition: template
-                            value_template: "{{ not has_priority_block }}"
-                          - condition: template
-                            value_template: "{{ soc_ok }}"
-                          - condition: template
-                            value_template: "{{ has_enough_sun }}"
-                        sequence:
-                          - choose:
-                              - conditions:
-                                  - condition: template
-                                    value_template: "{{ has_known_car_connected }}"
-                                sequence:
-                                  - service: switch.turn_on
-                                    target: !input wallbox_switch
-                                  - service: number.set_value
-                                    target: !input wallbox_current_number
-                                    data: { value: 32 }
-                                  - if:
-                                      - condition: template
-                                        value_template: "{{ is_c1_connected and var_c1_num != {} }}"
-                                    then:
-                                      - service: number.set_value
-                                        target: !input car_1_current_number
-                                        data:
-                                          value: "{{ [ [amps_c1 | float(6), 6] | max, 32 ] | min }}"
-                                      - service: switch.turn_on
-                                        target: !input car_1_switch
-                                  - if:
-                                      - condition: template
-                                        value_template: "{{ is_c2_connected and var_c2_num != {} and (amps_c2 | float(0)) >= 6 }}"
-                                    then:
-                                      - service: number.set_value
-                                        target: !input car_2_current_number
-                                        data:
-                                          value: "{{ [ [amps_c2 | float(6), 6] | max, 32 ] | min }}"
-                                      - service: switch.turn_on
-                                        target: !input car_2_switch
-                            default:
-                              - service: number.set_value
-                                target: !input wallbox_current_number
-                                data:
-                                  value: "{{ [ [calculated_amps, 6] | max, 32 ] | min }}"
-                              - service: switch.turn_on
-                                target: !input wallbox_switch
-                    default:
-                      - service: switch.turn_off
-                        target: !input wallbox_switch
-                      - if:
-                          - condition: template
-                            value_template: "{{ var_c1_sw != {} }}"
-                        then:
-                          - service: switch.turn_off
-                            target: !input car_1_switch
-
-              # -------------------------------------------------------------
-              # MODO 4: APAGADO
-              # -------------------------------------------------------------
-              - conditions:
-                  - condition: template
-                    value_template: "{{ is_state(var_modo, 'Apagado') }}"
-                sequence:
+                default:
                   - service: switch.turn_off
                     target: !input wallbox_switch
                   - if:
@@ -511,29 +528,19 @@ action:
                       - service: switch.turn_off
                         target: !input car_1_switch
 
-            default:
-              - service: switch.turn_off
-                target: !input wallbox_switch
-              - if:
-                  - condition: template
-                    value_template: "{{ var_c1_sw != {} }}"
-                then:
-                  - service: switch.turn_off
-                    target: !input car_1_switch
-
-    # SI NO HAY NINGÚN CABLE CONECTADO: Apagar todo
-    default:
-      - service: switch.turn_off
-        target: !input wallbox_switch
-      - if:
-          - condition: template
-            value_template: "{{ var_c1_sw != {} }}"
-        then:
-          - service: switch.turn_off
-            target: !input car_1_switch
-      - if:
-          - condition: template
-            value_template: "{{ var_c2_sw != {} }}"
-        then:
-          - service: switch.turn_off
-            target: !input car_2_switch
+      # SI NO HAY NINGÚN CABLE CONECTADO: Apagar todo
+      default:
+        - service: switch.turn_off
+          target: !input wallbox_switch
+        - if:
+            - condition: template
+              value_template: "{{ var_c1_sw != {} }}"
+          then:
+            - service: switch.turn_off
+              target: !input car_1_switch
+        - if:
+            - condition: template
+              value_template: "{{ var_c2_sw != {} }}"
+          then:
+            - service: switch.turn_off
+              target: !input car_2_switch
