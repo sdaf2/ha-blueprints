@@ -13,6 +13,14 @@ input_select:
       - "Solar"
     icon: mdi:ev-station
 
+  estrategia_reparto_ev:
+    name: "Estrategia Reparto Multi-Vehículo"
+    options:
+      - "Equitativo (50/50)"
+      - "Prioridad (Coche 1)"
+      - "Porcentaje Personalizado"
+    icon: mdi:scale-balance
+
 input_number:
   amperios_carga_manual:
     name: "Amperaje Carga Manual"
@@ -40,6 +48,33 @@ input_number:
     initial: 80
     unit_of_measurement: "%"
     icon: mdi:battery-charging-80
+
+  potencia_maxima_casa_w:
+    name: "Límite Potencia Combinada (Solar / Batería)"
+    min: 3000
+    max: 15000
+    step: 500
+    initial: 10000
+    unit_of_measurement: "W"
+    icon: mdi:transmission-tower-export
+
+  potencia_maxima_red_w:
+    name: "Límite Potencia Solo Red (Sin Batería/Solar)"
+    min: 1500
+    max: 10000
+    step: 500
+    initial: 3500
+    unit_of_measurement: "W"
+    icon: mdi:power-plug-outline
+
+  ev_porcentaje_coche_1:
+    name: "Porcentaje Reparto Coche 1"
+    min: 0
+    max: 100
+    step: 5
+    initial: 50
+    unit_of_measurement: "%"
+    icon: mdi:percent
 
   ev_min_charge_time_min:
     name: "Tiempo Mínimo de Carga Continuada"
