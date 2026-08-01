@@ -2,17 +2,88 @@ blueprint:
   name: "EV Smart"
   description: >
     Control de carga avanzado para VE en 4 modos (Apagado, Manual, Tarifa Nocturna/Finde, Solar).
-    Protección de Potencia Dinámica: 10kW con apoyo de Batería/Solar GoodWe y auto-reducción a 3.5kW en tramo solo red.
-    Incluye Balanceador Multi-Vehículo (50/50, Prioridad y Porcentaje).
+    Sistema híbrido inteligente: Asocia sensores de cable independientes para cada Vehículo y para el Wallbox.
+    Si detecta un coche integrado (ej. Tesla), actúa sobre su API. Si detecta un coche invitado (amigo), 
+    actúa directamente sobre el Wallbox Raedian. Incluye Protección Dinámica (10kW / 3.5kW) y Balanceador Multi-Vehículo.
   domain: automation
   input:
-    cable_sensor:
-      name: "🔌 Sensor de Cable Conectado"
-      description: "Sensor del cargador o del coche (Tesla) que indica si el cable está enchufado."
+    # --- DOCK / WALLBOX ---
+    wallbox_cable_sensor:
+      name: "🔌 Sensor de Cable del Wallbox (Raedian Status Connector)"
+      description: "Sensor de estado del cargador (ej. Status Connector de Raedian)."
+      default: {}
       selector:
         entity:
           domain: [sensor, binary_sensor]
 
+    wallbox_switch:
+      name: "🔌 Switch del Cargador (Wallbox Raedian)"
+      description: "Switch principal para encender/apagar el Wallbox."
+      selector:
+        target:
+          entity:
+            - domain: switch
+
+    wallbox_current_number:
+      name: "⚙️ Amperaje del Cargador (Wallbox Raedian)"
+      description: "Número de amperios del Wallbox."
+      selector:
+        target:
+          entity:
+            - domain: number
+
+    # --- VEHÍCULO 1 (ej. Tesla Propio) ---
+    car_1_cable_sensor:
+      name: "🚗 Sensor de Cable - Coche 1 (Tesla)"
+      description: "binary_sensor de cable enchufado del Coche 1."
+      default: {}
+      selector:
+        entity:
+          domain: [sensor, binary_sensor]
+
+    car_1_switch:
+      name: "🚗 Control Carga - Coche 1 (Tesla Switch)"
+      default: {}
+      selector:
+        target:
+          entity:
+            - domain: switch
+            - domain: button
+
+    car_1_current_number:
+      name: "⚙️ Amperaje - Coche 1 (Tesla Current Number)"
+      default: {}
+      selector:
+        target:
+          entity:
+            - domain: number
+
+    # --- VEHÍCULO 2 (ej. Segundo Coche) ---
+    car_2_cable_sensor:
+      name: "🚗 Sensor de Cable - Coche 2 (Opcional)"
+      default: {}
+      selector:
+        entity:
+          domain: [sensor, binary_sensor]
+
+    car_2_switch:
+      name: "🚗 Control Carga - Coche 2 (Opcional)"
+      default: {}
+      selector:
+        target:
+          entity:
+            - domain: switch
+            - domain: button
+
+    car_2_current_number:
+      name: "⚙️ Amperaje - Coche 2 (Opcional)"
+      default: {}
+      selector:
+        target:
+          entity:
+            - domain: number
+
+    # --- CONFIGURACIÓN DE MODOS Y POTENCIAS ---
     modo_carga_select:
       name: "🎛️ Selector de Modo de Carga"
       selector:
@@ -35,7 +106,6 @@ blueprint:
 
     max_house_power_input:
       name: "⚡ Límite Potencia Combinada (Solar/Batería) (W)"
-      description: "Límite cuando hay apoyo de placas o batería doméstica (ej. 10000 W = 10 kW)."
       default: {}
       selector:
         entity:
@@ -43,7 +113,6 @@ blueprint:
 
     max_grid_power_input:
       name: "🔌 Límite Potencia Solo Red (Sin Batería/Solar) (W)"
-      description: "Límite cuando la batería está vacía y no hay sol (ej. 3500 W = 3.5 kW)."
       default: {}
       selector:
         entity:
@@ -72,53 +141,6 @@ blueprint:
       selector:
         entity:
           domain: input_datetime
-
-    wallbox_switch:
-      name: "🔌 Switch del Cargador (Wallbox Raedian)"
-      selector:
-        target:
-          entity:
-            - domain: switch
-
-    wallbox_current_number:
-      name: "⚙️ Amperaje Máximo del Cargador (Wallbox Raedian)"
-      default: {}
-      selector:
-        target:
-          entity:
-            - domain: number
-
-    car_switch:
-      name: "🚗 Control Carga Coche 1 (Tesla Switch)"
-      selector:
-        target:
-          entity:
-            - domain: switch
-            - domain: button
-
-    car_current_number:
-      name: "⚙️ Amperaje Coche 1 (Tesla Current Number)"
-      selector:
-        target:
-          entity:
-            - domain: number
-
-    car_2_switch:
-      name: "🚗 Control Carga Coche 2 (Opcional)"
-      default: {}
-      selector:
-        target:
-          entity:
-            - domain: switch
-            - domain: button
-
-    car_2_current_number:
-      name: "⚙️ Amperaje Coche 2 (Opcional)"
-      default: {}
-      selector:
-        target:
-          entity:
-            - domain: number
 
     net_power_sensor:
       name: "⚡ Sensor Potencia de Red / Meter (W)"
@@ -185,7 +207,9 @@ blueprint:
 mode: restart
 
 variables:
-  var_cable: !input cable_sensor
+  var_wb_cable: !input wallbox_cable_sensor
+  var_c1_cable: !input car_1_cable_sensor
+  var_c2_cable: !input car_2_cable_sensor
   var_modo: !input modo_carga_select
   var_estrategia: !input estrategia_reparto_select
   var_p_coche1: !input porcentaje_coche_1_input
@@ -197,10 +221,10 @@ variables:
   var_h_fin: !input hora_fin_nocturna_input
   var_wb_sw: !input wallbox_switch
   var_wb_num: !input wallbox_current_number
-  var_car_sw: !input car_switch
-  var_car_num: !input car_current_number
-  var_car2_sw: !input car_2_switch
-  var_car2_num: !input car_2_current_number
+  var_c1_sw: !input car_1_switch
+  var_c1_num: !input car_1_current_number
+  var_c2_sw: !input car_2_switch
+  var_c2_num: !input car_2_current_number
   var_net_power: !input net_power_sensor
   var_pv_power: !input pv_power_sensor
   var_soc: !input battery_soc_sensor
@@ -215,7 +239,11 @@ trigger:
   - platform: state
     entity_id: !input modo_carga_select
   - platform: state
-    entity_id: !input cable_sensor
+    entity_id: !input wallbox_cable_sensor
+  - platform: state
+    entity_id: !input car_1_cable_sensor
+  - platform: state
+    entity_id: !input car_2_cable_sensor
   - platform: state
     entity_id: !input amperios_manual_input
   - platform: state
@@ -230,32 +258,36 @@ trigger:
     minutes: "/1"
 
 action:
-  # 1. FILTRO DE SEGURIDAD Y DETECCIÓN INTELIGENTE DE CABLE
+  # 1. EVALUACIÓN INTELIGENTE DE CABLES CONECTADOS
+  - variables:
+      wb_val: "{{ states(var_wb_cable) if var_wb_cable != {} else 'unavailable' }}"
+      c1_val: "{{ states(var_c1_cable) if var_c1_cable != {} else 'unavailable' }}"
+      c2_val: "{{ states(var_c2_cable) if var_c2_cable != {} else 'unavailable' }}"
+
+      is_wb_connected: >-
+        {{ wb_val in ['on', 'true', 'Conectado', 'connected', 'Preparing', 'Charging', 'SuspendedEV', 'SuspendedEVSE', 'Occupied', 'Finishing'] }}
+      is_c1_connected: >-
+        {{ c1_val in ['on', 'true', 'Conectado', 'connected'] }}
+      is_c2_connected: >-
+        {{ c2_val in ['on', 'true', 'Conectado', 'connected'] }}
+
+      # Hay cable si está enchufado el Wallbox o cualquiera de los coches
+      any_cable_connected: "{{ is_wb_connected or is_c1_connected or is_c2_connected }}"
+      
+      # Si hay coche integrado en HA enchufado (Tesla), actuamos sobre el coche. Si no, actuamos sobre Wallbox (Invitado).
+      has_known_car_connected: "{{ is_c1_connected or is_c2_connected }}"
+      is_guest_car: "{{ is_wb_connected and not has_known_car_connected }}"
+
+  # 2. FILTRO GENERAL DE CABLE
   - choose:
       - conditions:
           - condition: template
-            value_template: >-
-              {% set val = states(var_cable) %}
-              {{ val in ['on', 'true', 'Conectado', 'connected', 'Preparing', 'Charging', 'SuspendedEV', 'SuspendedEVSE', 'Occupied', 'Finishing'] or 
-                 (val != 'Available' and val != 'unavailable' and val != 'unknown' and val != 'off') }}
+            value_template: "{{ any_cable_connected }}"
         sequence:
-          # --- GESTIÓN DEL WALLBOX: Habilitado a 32A siempre que haya cable ---
-          - service: switch.turn_on
-            target: !input wallbox_switch
-          - if:
-              - condition: template
-                value_template: "{{ var_wb_num != {} }}"
-            then:
-              - service: number.set_value
-                target: !input wallbox_current_number
-                data:
-                  value: 32
-
           # --- CÁLCULO DE PROTECCIÓN DE POTENCIA DINÁMICA (10 kW vs 3.5 kW) ---
           - variables:
               pv_w: "{{ states(var_pv_power) | float(0) }}"
               soc_val: "{{ states(var_soc) | float(0) }}"
-              # Hay apoyo de energía si hay producción solar (>100W) o la batería de casa tiene carga (>10%)
               has_energy_support: "{{ pv_w > 100 or soc_val > 10 }}"
               
               limit_combined_w: "{{ states(var_max_house_w) | float(10000) if var_max_house_w != {} else 10000 }}"
@@ -264,30 +296,52 @@ action:
               effective_house_limit_w: "{{ limit_combined_w if has_energy_support else limit_grid_only_w }}"
               grid_power_w: "{{ states(var_net_power) | float(0) }}"
               
-              # Margen disponible de red para no sobrepasar el límite dinámico (3.5kW o 10kW)
               available_grid_margin_w: "{{ [ (effective_house_limit_w - grid_power_w), 0 ] | max }}"
-              max_safe_amps_from_grid: "{{ (available_grid_margin_w / 230) | int(0) }}"
+              max_safe_amps: "{{ (available_grid_margin_w / 230) | int(0) }}"
 
-          # --- GESTIÓN DE MODOS Y BALANCEO ---
+          # --- GESTIÓN DE MODOS Y EJECUCIÓN (COCHE INTEGRADO VS COCHE INVITADO) ---
           - choose:
               # -------------------------------------------------------------
-              # MODO 1: MANUAL (CON PROTECCIÓN DINÁMICA 3.5kW / 10kW)
+              # MODO 1: MANUAL
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
                     value_template: "{{ is_state(var_modo, 'Manual') }}"
                 sequence:
                   - variables:
-                      target_amps: "{{ [ (states(var_amp_manual) | float(16)), max_safe_amps_from_grid ] | min }}"
-                  - service: number.set_value
-                    target: !input car_current_number
-                    data:
-                      value: "{{ [ [target_amps, 6] | max, 32 ] | min }}"
-                  - service: switch.turn_on
-                    target: !input car_switch
+                      target_amps: "{{ [ (states(var_amp_manual) | float(16)), max_safe_amps ] | min }}"
+                      final_amps: "{{ [ [target_amps, 6] | max, 32 ] | min }}"
+                  - choose:
+                      # Si es Coche Integrado (ej. Tesla): Wallbox a 32A y regular en el Coche
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ has_known_car_connected }}"
+                        sequence:
+                          - service: switch.turn_on
+                            target: !input wallbox_switch
+                          - service: number.set_value
+                            target: !input wallbox_current_number
+                            data: { value: 32 }
+                          - if:
+                              - condition: template
+                                value_template: "{{ is_c1_connected and var_c1_num != {} }}"
+                            then:
+                              - service: number.set_value
+                                target: !input car_1_current_number
+                                data: { value: "{{ final_amps }}" }
+                              - service: switch.turn_on
+                                target: !input car_1_switch
+
+                      # Si es Coche Invitado (amigo): Regular directamente en el Wallbox Raedian
+                      default:
+                        - service: number.set_value
+                          target: !input wallbox_current_number
+                          data: { value: "{{ final_amps }}" }
+                        - service: switch.turn_on
+                          target: !input wallbox_switch
 
               # -------------------------------------------------------------
-              # MODO 2: NOCTURNO / FINDE (CON PROTECCIÓN DINÁMICA 3.5kW / 10kW)
+              # MODO 2: NOCTURNO / FINDE
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
@@ -305,32 +359,51 @@ action:
                               {{ es_finde or en_tramo_nocturno }}
                         sequence:
                           - variables:
-                              target_amps: "{{ [ (states(var_amp_nocturna) | float(16)), max_safe_amps_from_grid ] | min }}"
-                          - service: number.set_value
-                            target: !input car_current_number
-                            data:
-                              value: "{{ [ [target_amps, 6] | max, 32 ] | min }}"
-                          - service: switch.turn_on
-                            target: !input car_switch
+                              target_amps: "{{ [ (states(var_amp_nocturna) | float(16)), max_safe_amps ] | min }}"
+                              final_amps: "{{ [ [target_amps, 6] | max, 32 ] | min }}"
+                          - choose:
+                              - conditions:
+                                  - condition: template
+                                    value_template: "{{ has_known_car_connected }}"
+                                sequence:
+                                  - service: switch.turn_on
+                                    target: !input wallbox_switch
+                                  - service: number.set_value
+                                    target: !input wallbox_current_number
+                                    data: { value: 32 }
+                                  - if:
+                                      - condition: template
+                                        value_template: "{{ is_c1_connected and var_c1_num != {} }}"
+                                    then:
+                                      - service: number.set_value
+                                        target: !input car_1_current_number
+                                        data: { value: "{{ final_amps }}" }
+                                      - service: switch.turn_on
+                                        target: !input car_1_switch
+                              default:
+                                - service: number.set_value
+                                  target: !input wallbox_current_number
+                                  data: { value: "{{ final_amps }}" }
+                                - service: switch.turn_on
+                                  target: !input wallbox_switch
                     default:
                       - service: switch.turn_off
-                        target: !input car_switch
+                        target: !input wallbox_switch
+                      - if:
+                          - condition: template
+                            value_template: "{{ var_c1_sw != {} }}"
+                        then:
+                          - service: switch.turn_off
+                            target: !input car_1_switch
 
               # -------------------------------------------------------------
-              # MODO 3: SOLAR (EXCEDENTES + BALANCEO MULTI-VEHÍCULO 3 ESTRATEGIAS)
+              # MODO 3: SOLAR (EXCEDENTES MONOFÁSICOS + COCHE INTEGRADO / INVITADO)
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
                     value_template: "{{ is_state(var_modo, 'Solar') }}"
                 sequence:
                   - variables:
-                      car_sw_entity: >-
-                        {{ var_car_sw.entity_id[0] if var_car_sw.entity_id is defined and var_car_sw.entity_id is list else (var_car_sw.entity_id if var_car_sw.entity_id is defined else var_car_sw) }}
-                      car_num_entity: >-
-                        {{ var_car_num.entity_id[0] if var_car_num.entity_id is defined and var_car_num.entity_id is list else (var_car_num.entity_id if var_car_num.entity_id is defined else var_car_num) }}
-                      car_state: "{{ states(car_sw_entity) }}"
-                      car_last_changed: "{{ (now() - states[car_sw_entity].last_changed).total_seconds() if states[car_sw_entity] is defined and states[car_sw_entity].last_changed is defined else 99999 }}"
-                      num_last_changed: "{{ (now() - states[car_num_entity].last_changed).total_seconds() if states[car_num_entity] is defined and states[car_num_entity].last_changed is defined else 99999 }}"
                       min_charge_sec: "{{ (states(var_min_charge_m) | float(5)) * 60 }}"
                       stop_delay_sec: "{{ (states(var_stop_delay_m) | float(3)) * 60 }}"
                       amp_delay_sec: "{{ states(var_amp_delay_s) | float(60) }}"
@@ -348,84 +421,92 @@ action:
                       
                       total_available_w: "{{ exported_surplus_w + battery_charge_surplus_w }}"
                       raw_calculated_amps: "{{ (total_available_w / 230) | int(0) }}"
-                      calculated_amps: "{{ [ raw_calculated_amps, max_safe_amps_from_grid ] | min }}"
+                      calculated_amps: "{{ [ raw_calculated_amps, max_safe_amps ] | min }}"
                       has_enough_sun: "{{ calculated_amps >= 6 }}"
 
-                      # CÁLCULO DE REPARTO MULTI-VEHÍCULO SEGÚN ESTRATEGIA
+                      # REPARTO MULTI-VEHÍCULO
                       estrategia_val: "{{ states(var_estrategia) if var_estrategia != {} else 'Equitativo (50/50)' }}"
                       pct_c1: "{{ (states(var_p_coche1) | float(50)) / 100.0 if var_p_coche1 != {} else 0.5 }}"
                       
-                      amps_coche_1: >-
+                      amps_c1: >-
                         {% if estrategia_val == 'Prioridad (Coche 1)' %}
                           {{ calculated_amps }}
                         {% elif estrategia_val == 'Porcentaje Personalizado' %}
                           {{ (calculated_amps * pct_c1) | int(0) }}
                         {% else %}
-                          {# Equitativo 50/50 #}
                           {{ (calculated_amps / 2) | int(0) }}
                         {% endif %}
-                        
-                      amps_coche_2: >-
+
+                      amps_c2: >-
                         {% if estrategia_val == 'Prioridad (Coche 1)' %}
-                          {{ [ (calculated_amps - amps_coche_1 | int), 0 ] | max }}
+                          {{ [ (calculated_amps - (amps_c1 | int)), 0 ] | max }}
                         {% elif estrategia_val == 'Porcentaje Personalizado' %}
                           {{ (calculated_amps * (1 - pct_c1)) | int(0) }}
                         {% else %}
-                          {# Equitativo 50/50 #}
                           {{ (calculated_amps / 2) | int(0) }}
                         {% endif %}
 
                   - choose:
-                      # CASO A: Activar o mantener carga solar en Tesla
+                      # CASO A: Hay sol y condiciones OK -> Activar Carga Solar
                       - conditions:
                           - condition: template
                             value_template: "{{ not has_priority_block }}"
                           - condition: template
                             value_template: "{{ soc_ok }}"
                           - condition: template
-                            value_template: >-
-                              {{ has_enough_sun or (car_state == 'on' and car_last_changed < min_charge_sec) }}
-                          - condition: template
-                            value_template: >-
-                              {{ car_state == 'on' or car_last_changed >= stop_delay_sec }}
+                            value_template: "{{ has_enough_sun }}"
                         sequence:
                           - choose:
+                              # A.1 SI HAY COCHE INTEGRADO (Tesla)
                               - conditions:
                                   - condition: template
-                                    value_template: "{{ num_last_changed >= amp_delay_sec }}"
+                                    value_template: "{{ has_known_car_connected }}"
                                 sequence:
+                                  - service: switch.turn_on
+                                    target: !input wallbox_switch
                                   - service: number.set_value
-                                    target: !input car_current_number
-                                    data:
-                                      value: "{{ [ [amps_coche_1 | float(6), 6] | max, 32 ] | min }}"
+                                    target: !input wallbox_current_number
+                                    data: { value: 32 }
                                   - if:
                                       - condition: template
-                                        value_template: "{{ var_car2_num != {} and (amps_coche_2 | float(0)) >= 6 }}"
+                                        value_template: "{{ is_c1_connected and var_c1_num != {} }}"
+                                    then:
+                                      - service: number.set_value
+                                        target: !input car_1_current_number
+                                        data:
+                                          value: "{{ [ [amps_c1 | float(6), 6] | max, 32 ] | min }}"
+                                      - service: switch.turn_on
+                                        target: !input car_1_switch
+                                  - if:
+                                      - condition: template
+                                        value_template: "{{ is_c2_connected and var_c2_num != {} and (amps_c2 | float(0)) >= 6 }}"
                                     then:
                                       - service: number.set_value
                                         target: !input car_2_current_number
                                         data:
-                                          value: "{{ [ [amps_coche_2 | float(6), 6] | max, 32 ] | min }}"
+                                          value: "{{ [ [amps_c2 | float(6), 6] | max, 32 ] | min }}"
                                       - service: switch.turn_on
                                         target: !input car_2_switch
-                          - service: switch.turn_on
-                            target: !input car_switch
 
-                    # CASO B: Parar carga solar
+                              # A.2 SI ES COCHE INVITADO (Sin API) -> Regular directamente el Wallbox Raedian
+                              default:
+                                - service: number.set_value
+                                  target: !input wallbox_current_number
+                                  data:
+                                    value: "{{ [ [calculated_amps, 6] | max, 32 ] | min }}"
+                                - service: switch.turn_on
+                                  target: !input wallbox_switch
+
+                    # CASO B: Sin sol suficiente -> Parar Carga
                     default:
-                      - choose:
-                          - conditions:
-                              - condition: template
-                                value_template: "{{ car_state == 'off' or car_last_changed >= min_charge_sec }}"
-                            sequence:
-                              - service: switch.turn_off
-                                target: !input car_switch
-                              - if:
-                                  - condition: template
-                                    value_template: "{{ var_car2_sw != {} }}"
-                                then:
-                                  - service: switch.turn_off
-                                    target: !input car_2_switch
+                      - service: switch.turn_off
+                        target: !input wallbox_switch
+                      - if:
+                          - condition: template
+                            value_template: "{{ var_c1_sw != {} }}"
+                        then:
+                          - service: switch.turn_off
+                            target: !input car_1_switch
 
               # -------------------------------------------------------------
               # MODO 4: APAGADO
@@ -435,21 +516,37 @@ action:
                     value_template: "{{ is_state(var_modo, 'Apagado') }}"
                 sequence:
                   - service: switch.turn_off
-                    target: !input car_switch
+                    target: !input wallbox_switch
                   - if:
                       - condition: template
-                        value_template: "{{ var_car2_sw != {} }}"
+                        value_template: "{{ var_c1_sw != {} }}"
                     then:
                       - service: switch.turn_off
-                        target: !input car_2_switch
+                        target: !input car_1_switch
 
             default:
               - service: switch.turn_off
-                target: !input car_switch
+                target: !input wallbox_switch
+              - if:
+                  - condition: template
+                    value_template: "{{ var_c1_sw != {} }}"
+                then:
+                  - service: switch.turn_off
+                    target: !input car_1_switch
 
-    # SI NO HAY CABLE CONECTADO: Apagar Tesla y apagado de seguridad del Wallbox
+    # SI NO HAY NINGÚN CABLE CONECTADO (Ni Wallbox ni Coches): Apagar todo
     default:
       - service: switch.turn_off
-        target: !input car_switch
-      - service: switch.turn_off
         target: !input wallbox_switch
+      - if:
+          - condition: template
+            value_template: "{{ var_c1_sw != {} }}"
+        then:
+          - service: switch.turn_off
+            target: !input car_1_switch
+      - if:
+          - condition: template
+            value_template: "{{ var_c2_sw != {} }}"
+        then:
+          - service: switch.turn_off
+            target: !input car_2_switch
