@@ -2,13 +2,15 @@ blueprint:
   name: "EV Smart"
   description: >
     Control de carga avanzado para VE en 4 modos (Apagado, Manual, Tarifa Nocturna/Finde, Solar).
-    Estrategia Tesla-Control: Mantiene el Wallbox habilitado a 32A al conectar el cable, 
-    y delega el inicio/parada y la regulación de amperios dinámicos directamente en el vehículo (Tesla).
+    Soporta detección de cable tanto por el vehículo (Tesla charger_connected) como por el estado OCPP del cargador Raedian (Status Connector != Available).
+    Ideal para escenarios multi-vehículo y multi-cargador.
   domain: automation
   input:
     cable_sensor:
-      name: "🔌 Sensor de Cable Conectado"
-      description: "Sensor del cargador o del coche (Tesla) que indica si el cable está enchufado."
+      name: "🔌 Sensor de Cable Conectado (Coche o Cargador Raedian)"
+      description: >
+        Soporta binary_sensor de cable del coche (ej. Tesla connected) o el sensor de estado del cargador Raedian (Status Connector).
+        Se considera conectado si el estado del cargador es Preparing, Charging, SuspendedEV, Occupied o si el sensor del coche está en ON.
       selector:
         entity:
           domain: [sensor, binary_sensor]
@@ -46,7 +48,7 @@ blueprint:
 
     wallbox_switch:
       name: "🔌 Switch del Cargador (Wallbox Raedian)"
-      description: "Switch del Wallbox (se mantendrá activado a 32A al detectar cable)."
+      description: "Switch del Wallbox (se fijará activado a 32A al detectar cable conectado)."
       selector:
         target:
           entity:
@@ -182,15 +184,15 @@ trigger:
     minutes: "/1"
 
 action:
-  # 1. FILTRO DE SEGURIDAD: Comprobar si el cable está conectado
+  # 1. FILTRO DE SEGURIDAD Y DETECCIÓN INTELIGENTE DE CABLE
   - choose:
       - conditions:
           - condition: template
             value_template: >-
-              {{ is_state(var_cable, 'on') or 
-                 is_state(var_cable, 'Conectado') or 
-                 is_state(var_cable, 'connected') or 
-                 is_state(var_cable, 'true') }}
+              {% set val = states(var_cable) %}
+              {# Evalúa si el cable está conectado ya sea por sensor del coche (on/true) o por estado OCPP de Raedian (Preparing, Charging, SuspendedEV, Occupied) #}
+              {{ val in ['on', 'true', 'Conectado', 'connected', 'Preparing', 'Charging', 'SuspendedEV', 'SuspendedEVSE', 'Occupied', 'Finishing'] or 
+                 (val != 'Available' and val != 'unavailable' and val != 'unknown' and val != 'off') }}
         sequence:
           # --- GESTIÓN DEL WALLBOX: Habilitado a 32A siempre que haya cable ---
           - service: switch.turn_on
