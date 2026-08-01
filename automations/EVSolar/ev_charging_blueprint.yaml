@@ -1,5 +1,5 @@
 blueprint:
-  name: "Gestor Inteligente de Carga Vehículo Eléctrico (EV)"
+  name: "EV Smart"
   description: >
     Control de carga avanzado para VE en 4 modos (Apagado, Manual, Tarifa Nocturna/Finde, Solar).
     Optimizado para inversor GoodWe (Meter 2 Active Power, PV Power, Battery SoC, Battery Power) y cargador Raedian/Tesla.
