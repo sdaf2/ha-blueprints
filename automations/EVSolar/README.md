@@ -4,8 +4,8 @@ Gestión inteligente para el control de carga del vehículo eléctrico en Home A
 
 ## 📁 Archivos del Proyecto
 
-* **`ev_charging_helpers.yaml`**: Entidades auxiliares (`input_select`, `input_number`, `input_datetime`, `input_boolean`) para crear controles en Lovelace.
-* **`ev_charging_blueprint.yaml`**: Blueprint desacoplada y reutilizable para generar la automatización sin hardcodear IDs.
+* **`ev_charging_helpers.yaml`**: Entidades auxiliares (`input_select`, `input_number`, `input_datetime`, `input_boolean`) para controlar los modos y límites desde Lovelace.
+* **`ev_charging_blueprint.yaml`**: Blueprint desacoplada y reutilizable con la lógica de control avanzada.
 
 ## 🎛️ Modos de Carga
 
@@ -17,15 +17,28 @@ Gestión inteligente para el control de carga del vehículo eléctrico en Home A
 4. **Solar (Excedentes Monofásicos 230V)**: 
    * Ajusta dinámicamente el amperaje $I = \text{Excedentes W} / 230$ entre 6A y 32A.
 
+## 👥 Asociación Inteligente de Cables: Coche Integrado vs Coche Invitado (Amigo)
+
+La Blueprint asigna sensores de cable **independientes** para el Wallbox y para cada vehículo:
+
+* **🚗 Coche Integrado (ej. tu Tesla)**: Si se detecta conectado el cable del Coche 1 (`car_1_cable_sensor`), la automatización **actúa sobre el Tesla** (API) dejando el Wallbox abierto a 32A.
+* **🤝 Coche Invitado (ej. coche de un amigo)**: Si el sensor del Wallbox (`wallbox_cable_sensor` de Raedian) detecta un coche conectado pero **ninguno de tus coches integrados reporta conexión**, la automatización detecta que es un **Coche Invitado** y **actúa directamente sobre el Wallbox Raedian** (ajustando su amperaje y encendido/apagado para que tu amigo pueda cargar con tus excedentes solares o tarifa nocturna de forma segura).
+
+## ⚡ Protección de Potencia Dinámica (10 kW con Batería/Solar vs 3.5 kW Solo Red)
+
+* **🌞 Con Producción Solar o Carga en Batería GoodWe**: Techo máximo de **10.000 W (10 kW)** combinados (`potencia_maxima_casa_w`).
+* **🌙 De Noche o Sin Batería (Solo Red Eléctrica)**: Reduce el techo máximo a **3.500 W (3,5 kW)** (`potencia_maxima_red_w`), limitando la corriente del coche a ~15A para no sobrepasar la potencia contratada de la red ni hacer saltar el automático (ICP).
+
+## ⚖️ Balanceador Multi-Vehículo (3 Estrategias Seleccionables)
+
+Permite elegir cómo distribuir la energía solar cuando hay 2 coches conectados:
+
+1. **Equitativo (50/50)**: Divide la potencia a partes iguales entre ambos coches (respetando siempre el mínimo de 6A por coche).
+2. **Prioridad (Coche 1)**: Asigna la máxima potencia posible al Coche 1 y deriva el excedente restante al Coche 2.
+3. **Porcentaje Personalizado**: Distribuye la potencia según el porcentaje fijado en `ev_porcentaje_coche_1` (ej. 70% / 30%).
+
 ## ⏱️ Control Anti-Flapping y Estabilización
 
-Para proteger el cargador y los contactores del coche contra arranques/paradas continuas causadas por nubes o fluctuaciones:
-
-* **Tiempo Mínimo de Carga Continuada (`ev_min_charge_time_min`)**: Una vez iniciada la carga solar, la mantiene durante al menos **X minutos** (defecto 5 min) aunque pase una nube.
-* **Tiempo Mínimo de Pausa (`ev_stop_delay_min`)**: Al detenerse la carga, espera al menos **Y minutos** (defecto 3 min) antes de poder volver a encender el cargador.
-* **Estabilización de Amperios (`ev_amp_change_delay_sec`)**: Espera **Z segundos** (defecto 60 s) entre variaciones continuas de corriente para evitar sobrecargar la electrónica del cargador/vehículo.
-
-## 🛑 Gestión de Prioridad de Excedentes
-
-* **`ev_prioridad_bloqueada`**: Entidad `input_boolean` u otra entidad externa (ej. termo eléctrico o aerotermia). Si esta entidad está en estado `on`, la automatización pausará la carga solar del EV para priorizar esos consumos domésticos.
-* **SoC Batería Casa GoodWe (`ev_solar_min_battery_soc`)**: Solo se derivan excedentes al EV si la batería doméstica está por encima de un porcentaje mínimo configurable (defecto 80%).
+* **Tiempo Mínimo de Carga Continuada (`ev_min_charge_time_min`)**: Mantiene la carga al menos 5 min ante nubes pasajeras.
+* **Tiempo Mínimo de Pausa (`ev_stop_delay_min`)**: Requiere 3 min de pausa antes de volver a encender tras un paro.
+* **Estabilización de Amperios (`ev_amp_change_delay_sec`)**: Espera 60 s entre variaciones continuas para no sobrecargar el vehículo.
