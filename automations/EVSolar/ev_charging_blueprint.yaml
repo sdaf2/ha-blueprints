@@ -2,25 +2,52 @@ blueprint:
   name: "EV Smart"
   description: >
     Control de carga avanzado para VE en 4 modos (Apagado, Manual, Tarifa Nocturna/Finde, Solar).
-    Soporta detección de cable tanto por el vehículo (Tesla charger_connected) como por el estado OCPP del cargador Raedian (Status Connector != Available).
-    Ideal para escenarios multi-vehículo y multi-cargador.
+    Protección de Potencia Dinámica: 10kW con apoyo de Batería/Solar GoodWe y auto-reducción a 3.5kW en tramo solo red.
+    Incluye Balanceador Multi-Vehículo (50/50, Prioridad y Porcentaje).
   domain: automation
   input:
     cable_sensor:
-      name: "🔌 Sensor de Cable Conectado (Coche o Cargador Raedian)"
-      description: >
-        Soporta binary_sensor de cable del coche (ej. Tesla connected) o el sensor de estado del cargador Raedian (Status Connector).
-        Se considera conectado si el estado del cargador es Preparing, Charging, SuspendedEV, Occupied o si el sensor del coche está en ON.
+      name: "🔌 Sensor de Cable Conectado"
+      description: "Sensor del cargador o del coche (Tesla) que indica si el cable está enchufado."
       selector:
         entity:
           domain: [sensor, binary_sensor]
 
     modo_carga_select:
       name: "🎛️ Selector de Modo de Carga"
-      description: "input_select con las opciones: Apagado, Manual, Nocturno / Finde, Solar."
       selector:
         entity:
           domain: input_select
+
+    estrategia_reparto_select:
+      name: "⚖️ Selector Estrategia Reparto Multi-Vehículo"
+      default: {}
+      selector:
+        entity:
+          domain: input_select
+
+    porcentaje_coche_1_input:
+      name: "📊 Porcentaje Reparto Coche 1"
+      default: {}
+      selector:
+        entity:
+          domain: input_number
+
+    max_house_power_input:
+      name: "⚡ Límite Potencia Combinada (Solar/Batería) (W)"
+      description: "Límite cuando hay apoyo de placas o batería doméstica (ej. 10000 W = 10 kW)."
+      default: {}
+      selector:
+        entity:
+          domain: input_number
+
+    max_grid_power_input:
+      name: "🔌 Límite Potencia Solo Red (Sin Batería/Solar) (W)"
+      description: "Límite cuando la batería está vacía y no hay sol (ej. 3500 W = 3.5 kW)."
+      default: {}
+      selector:
+        entity:
+          domain: input_number
 
     amperios_manual_input:
       name: "⚡ Selector Amperios Manual"
@@ -48,7 +75,6 @@ blueprint:
 
     wallbox_switch:
       name: "🔌 Switch del Cargador (Wallbox Raedian)"
-      description: "Switch del Wallbox (se fijará activado a 32A al detectar cable conectado)."
       selector:
         target:
           entity:
@@ -56,7 +82,6 @@ blueprint:
 
     wallbox_current_number:
       name: "⚙️ Amperaje Máximo del Cargador (Wallbox Raedian)"
-      description: "Amperaje del Wallbox (se fijará en 32A)."
       default: {}
       selector:
         target:
@@ -64,8 +89,7 @@ blueprint:
             - domain: number
 
     car_switch:
-      name: "🚗 Control Carga del Vehículo (Tesla Switch/Button)"
-      description: "Entidad del vehículo para iniciar/detener la carga."
+      name: "🚗 Control Carga Coche 1 (Tesla Switch)"
       selector:
         target:
           entity:
@@ -73,8 +97,24 @@ blueprint:
             - domain: button
 
     car_current_number:
-      name: "⚙️ Amperaje del Vehículo (Tesla Current Number)"
-      description: "Entidad number que ajusta el amperaje de carga directamente en el coche."
+      name: "⚙️ Amperaje Coche 1 (Tesla Current Number)"
+      selector:
+        target:
+          entity:
+            - domain: number
+
+    car_2_switch:
+      name: "🚗 Control Carga Coche 2 (Opcional)"
+      default: {}
+      selector:
+        target:
+          entity:
+            - domain: switch
+            - domain: button
+
+    car_2_current_number:
+      name: "⚙️ Amperaje Coche 2 (Opcional)"
+      default: {}
       selector:
         target:
           entity:
@@ -82,7 +122,6 @@ blueprint:
 
     net_power_sensor:
       name: "⚡ Sensor Potencia de Red / Meter (W)"
-      description: "Sensor de red GoodWe (Meter 2 Active Power). Negativo cuando exporta a red."
       default: sensor.meter_2_active_power
       selector:
         entity:
@@ -148,6 +187,10 @@ mode: restart
 variables:
   var_cable: !input cable_sensor
   var_modo: !input modo_carga_select
+  var_estrategia: !input estrategia_reparto_select
+  var_p_coche1: !input porcentaje_coche_1_input
+  var_max_house_w: !input max_house_power_input
+  var_max_grid_w: !input max_grid_power_input
   var_amp_manual: !input amperios_manual_input
   var_amp_nocturna: !input amperios_nocturna_input
   var_h_inicio: !input hora_inicio_nocturna_input
@@ -156,7 +199,10 @@ variables:
   var_wb_num: !input wallbox_current_number
   var_car_sw: !input car_switch
   var_car_num: !input car_current_number
+  var_car2_sw: !input car_2_switch
+  var_car2_num: !input car_2_current_number
   var_net_power: !input net_power_sensor
+  var_pv_power: !input pv_power_sensor
   var_soc: !input battery_soc_sensor
   var_bat_power: !input battery_power_sensor
   var_min_soc: !input min_battery_soc_input
@@ -190,7 +236,6 @@ action:
           - condition: template
             value_template: >-
               {% set val = states(var_cable) %}
-              {# Evalúa si el cable está conectado ya sea por sensor del coche (on/true) o por estado OCPP de Raedian (Preparing, Charging, SuspendedEV, Occupied) #}
               {{ val in ['on', 'true', 'Conectado', 'connected', 'Preparing', 'Charging', 'SuspendedEV', 'SuspendedEVSE', 'Occupied', 'Finishing'] or 
                  (val != 'Available' and val != 'unavailable' and val != 'unknown' and val != 'off') }}
         sequence:
@@ -206,24 +251,43 @@ action:
                 data:
                   value: 32
 
-          # --- GESTIÓN DE MODOS DIRECTAMENTE EN EL VEHÍCULO (TESLA) ---
+          # --- CÁLCULO DE PROTECCIÓN DE POTENCIA DINÁMICA (10 kW vs 3.5 kW) ---
+          - variables:
+              pv_w: "{{ states(var_pv_power) | float(0) }}"
+              soc_val: "{{ states(var_soc) | float(0) }}"
+              # Hay apoyo de energía si hay producción solar (>100W) o la batería de casa tiene carga (>10%)
+              has_energy_support: "{{ pv_w > 100 or soc_val > 10 }}"
+              
+              limit_combined_w: "{{ states(var_max_house_w) | float(10000) if var_max_house_w != {} else 10000 }}"
+              limit_grid_only_w: "{{ states(var_max_grid_w) | float(3500) if var_max_grid_w != {} else 3500 }}"
+              
+              effective_house_limit_w: "{{ limit_combined_w if has_energy_support else limit_grid_only_w }}"
+              grid_power_w: "{{ states(var_net_power) | float(0) }}"
+              
+              # Margen disponible de red para no sobrepasar el límite dinámico (3.5kW o 10kW)
+              available_grid_margin_w: "{{ [ (effective_house_limit_w - grid_power_w), 0 ] | max }}"
+              max_safe_amps_from_grid: "{{ (available_grid_margin_w / 230) | int(0) }}"
+
+          # --- GESTIÓN DE MODOS Y BALANCEO ---
           - choose:
               # -------------------------------------------------------------
-              # MODO 1: MANUAL
+              # MODO 1: MANUAL (CON PROTECCIÓN DINÁMICA 3.5kW / 10kW)
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
                     value_template: "{{ is_state(var_modo, 'Manual') }}"
                 sequence:
+                  - variables:
+                      target_amps: "{{ [ (states(var_amp_manual) | float(16)), max_safe_amps_from_grid ] | min }}"
                   - service: number.set_value
                     target: !input car_current_number
                     data:
-                      value: "{{ states(var_amp_manual) | float(16) }}"
+                      value: "{{ [ [target_amps, 6] | max, 32 ] | min }}"
                   - service: switch.turn_on
                     target: !input car_switch
 
               # -------------------------------------------------------------
-              # MODO 2: NOCTURNO / FINDE
+              # MODO 2: NOCTURNO / FINDE (CON PROTECCIÓN DINÁMICA 3.5kW / 10kW)
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
@@ -240,10 +304,12 @@ action:
                               {% set en_tramo_nocturno = (t_now >= t_start or t_now <= t_end) if (t_start > t_end) else (t_now >= t_start and t_now <= t_end) %}
                               {{ es_finde or en_tramo_nocturno }}
                         sequence:
+                          - variables:
+                              target_amps: "{{ [ (states(var_amp_nocturna) | float(16)), max_safe_amps_from_grid ] | min }}"
                           - service: number.set_value
                             target: !input car_current_number
                             data:
-                              value: "{{ states(var_amp_nocturna) | float(16) }}"
+                              value: "{{ [ [target_amps, 6] | max, 32 ] | min }}"
                           - service: switch.turn_on
                             target: !input car_switch
                     default:
@@ -251,7 +317,7 @@ action:
                         target: !input car_switch
 
               # -------------------------------------------------------------
-              # MODO 3: SOLAR (EXCEDENTES GESTIONADOS EN EL TESLA)
+              # MODO 3: SOLAR (EXCEDENTES + BALANCEO MULTI-VEHÍCULO 3 ESTRATEGIAS)
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
@@ -281,8 +347,33 @@ action:
                       battery_charge_surplus_w: "{{ (bat_power_w * -1) if (soc_ok and bat_power_w < 0) else 0 }}"
                       
                       total_available_w: "{{ exported_surplus_w + battery_charge_surplus_w }}"
-                      calculated_amps: "{{ (total_available_w / 230) | int(0) }}"
+                      raw_calculated_amps: "{{ (total_available_w / 230) | int(0) }}"
+                      calculated_amps: "{{ [ raw_calculated_amps, max_safe_amps_from_grid ] | min }}"
                       has_enough_sun: "{{ calculated_amps >= 6 }}"
+
+                      # CÁLCULO DE REPARTO MULTI-VEHÍCULO SEGÚN ESTRATEGIA
+                      estrategia_val: "{{ states(var_estrategia) if var_estrategia != {} else 'Equitativo (50/50)' }}"
+                      pct_c1: "{{ (states(var_p_coche1) | float(50)) / 100.0 if var_p_coche1 != {} else 0.5 }}"
+                      
+                      amps_coche_1: >-
+                        {% if estrategia_val == 'Prioridad (Coche 1)' %}
+                          {{ calculated_amps }}
+                        {% elif estrategia_val == 'Porcentaje Personalizado' %}
+                          {{ (calculated_amps * pct_c1) | int(0) }}
+                        {% else %}
+                          {# Equitativo 50/50 #}
+                          {{ (calculated_amps / 2) | int(0) }}
+                        {% endif %}
+                        
+                      amps_coche_2: >-
+                        {% if estrategia_val == 'Prioridad (Coche 1)' %}
+                          {{ [ (calculated_amps - amps_coche_1 | int), 0 ] | max }}
+                        {% elif estrategia_val == 'Porcentaje Personalizado' %}
+                          {{ (calculated_amps * (1 - pct_c1)) | int(0) }}
+                        {% else %}
+                          {# Equitativo 50/50 #}
+                          {{ (calculated_amps / 2) | int(0) }}
+                        {% endif %}
 
                   - choose:
                       # CASO A: Activar o mantener carga solar en Tesla
@@ -306,11 +397,21 @@ action:
                                   - service: number.set_value
                                     target: !input car_current_number
                                     data:
-                                      value: "{{ [ [calculated_amps, 6] | max, 32 ] | min }}"
+                                      value: "{{ [ [amps_coche_1 | float(6), 6] | max, 32 ] | min }}"
+                                  - if:
+                                      - condition: template
+                                        value_template: "{{ var_car2_num != {} and (amps_coche_2 | float(0)) >= 6 }}"
+                                    then:
+                                      - service: number.set_value
+                                        target: !input car_2_current_number
+                                        data:
+                                          value: "{{ [ [amps_coche_2 | float(6), 6] | max, 32 ] | min }}"
+                                      - service: switch.turn_on
+                                        target: !input car_2_switch
                           - service: switch.turn_on
                             target: !input car_switch
 
-                    # CASO B: Parar carga en Tesla
+                    # CASO B: Parar carga solar
                     default:
                       - choose:
                           - conditions:
@@ -319,6 +420,12 @@ action:
                             sequence:
                               - service: switch.turn_off
                                 target: !input car_switch
+                              - if:
+                                  - condition: template
+                                    value_template: "{{ var_car2_sw != {} }}"
+                                then:
+                                  - service: switch.turn_off
+                                    target: !input car_2_switch
 
               # -------------------------------------------------------------
               # MODO 4: APAGADO
@@ -329,6 +436,12 @@ action:
                 sequence:
                   - service: switch.turn_off
                     target: !input car_switch
+                  - if:
+                      - condition: template
+                        value_template: "{{ var_car2_sw != {} }}"
+                    then:
+                      - service: switch.turn_off
+                        target: !input car_2_switch
 
             default:
               - service: switch.turn_off
