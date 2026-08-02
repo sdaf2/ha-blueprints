@@ -4,7 +4,8 @@ blueprint:
   description: >
     Control de carga avanzado para VE. Incluye modo Automático (Solar de día / Nocturno de noche),
     Manual, Solar y Nocturno. Configuración del signo de inyección a red para Meter GoodWe,
-    Protección Dinámica (10kW / 3.5kW), Detección de Vehículo Único (100% potencia si hay solo 1 coche),
+    Protección Dinámica (10kW / 3.5kW), Detección de Vehículo Único y Reparto Inteligente de Potencia
+    (si un coche completa su carga al 100%, el otro coche recibe automáticamente el 100% de la energía solar disponible),
     Soporte de Batería de Casa al caer el Sol (> SoC Mínimo) para mantener carga continuada,
     Temporizador de Pausa Continuada (no desconecta hasta transcurrir el tiempo de pausa mínimo)
     y Temporizador Estricto de Amperaje (mantiene amperios estables sin cambios bruscos).
@@ -15,6 +16,14 @@ blueprint:
       name: "🚗 Sensor de Cable - Coche 1 (Tesla)"
       description: "Sensor o binary_sensor del coche que indica si el cable está conectado (ej. garaje_nafnaf_cable_de_carga)."
       default: binary_sensor.garaje_nafnaf_cable_de_carga
+      selector:
+        entity:
+          domain: [sensor, binary_sensor]
+
+    car_1_state_sensor:
+      name: "🚗 Sensor Estado de Carga - Coche 1 (Opcional)"
+      description: "Sensor que indica el estado del coche (ej. sensor.garaje_nafnaf_estado_de_carga). Si indica 'Complete' o 'Completo', el 100% del sol pasará al Coche 2."
+      default: {}
       selector:
         entity:
           domain: [sensor, binary_sensor]
@@ -64,6 +73,14 @@ blueprint:
     # --- VEHÍCULO 2 (ej. Segundo Coche) ---
     car_2_cable_sensor:
       name: "🚗 Sensor de Cable - Coche 2 (Opcional)"
+      default: {}
+      selector:
+        entity:
+          domain: [sensor, binary_sensor]
+
+    car_2_state_sensor:
+      name: "🚗 Sensor Estado de Carga - Coche 2 (Opcional)"
+      description: "Sensor que indica el estado de carga del Coche 2."
       default: {}
       selector:
         entity:
@@ -223,7 +240,9 @@ mode: restart
 variables:
   var_wb_cable: !input wallbox_cable_sensor
   var_c1_cable: !input car_1_cable_sensor
+  var_c1_state: !input car_1_state_sensor
   var_c2_cable: !input car_2_cable_sensor
+  var_c2_state: !input car_2_state_sensor
   var_sign_setting: !input net_power_sign
   var_modo: !input modo_carga_select
   var_estrategia: !input estrategia_reparto_select
@@ -260,6 +279,10 @@ trigger:
   - platform: state
     entity_id: !input car_2_cable_sensor
   - platform: state
+    entity_id: !input car_1_state_sensor
+  - platform: state
+    entity_id: !input car_2_state_sensor
+  - platform: state
     entity_id: !input amperios_manual_input
   - platform: state
     entity_id: !input amperios_nocturna_input
@@ -275,11 +298,14 @@ trigger:
     minutes: "/1"
 
 action:
-  # 1. EVALUACIÓN INTELIGENTE DE CABLES CONECTADOS
+  # 1. EVALUACIÓN INTELIGENTE DE CABLES Y ESTADO DE CARGA DE VEHÍCULOS
   - variables:
       wb_val: "{{ (states(var_wb_cable) | lower) if var_wb_cable != {} else 'unavailable' }}"
       c1_val: "{{ (states(var_c1_cable) | lower) if var_c1_cable != {} else 'unavailable' }}"
       c2_val: "{{ (states(var_c2_cable) | lower) if var_c2_cable != {} else 'unavailable' }}"
+
+      c1_st_val: "{{ (states(var_c1_state) | lower) if var_c1_state != {} else 'charging' }}"
+      c2_st_val: "{{ (states(var_c2_state) | lower) if var_c2_state != {} else 'charging' }}"
 
       is_wb_connected: >-
         {{ wb_val in ['on', 'true', 'conectado', 'connected', 'preparing', 'charging', 'suspendedev', 'suspendedevse', 'occupied', 'finishing', '1'] }}
@@ -288,9 +314,17 @@ action:
       is_c2_connected: >-
         {{ c2_val in ['on', 'true', 'conectado', 'connected', 'charging', 'pluggedin', '1'] }}
 
+      # ¿Está el vehículo activamente necesitado de carga? (False si ya completó al 100%)
+      is_c1_active: >-
+        {{ is_c1_connected and (c1_st_val not in ['complete', 'completed', 'completo', 'full', 'stopped', 'off', 'false', '0']) }}
+      is_c2_active: >-
+        {{ is_c2_connected and (c2_st_val not in ['complete', 'completed', 'completo', 'full', 'stopped', 'off', 'false', '0']) }}
+
       any_cable_connected: "{{ is_wb_connected or is_c1_connected or is_c2_connected }}"
       has_known_car_connected: "{{ is_c1_connected or is_c2_connected }}"
-      num_connected_cars: "{{ (1 if is_c1_connected else 0) + (1 if is_c2_connected else 0) }}"
+      
+      # Número de coches ACTIVOS cargando (excluye coches que ya llegaron al 100%)
+      num_active_cars: "{{ (1 if is_c1_active else 0) + (1 if is_c2_active else 0) }}"
 
       raw_modo_str: "{{ states(var_modo) }}"
       es_finde: "{{ now().weekday() in [5, 6] }}"
@@ -532,8 +566,12 @@ action:
                       estrategia_val: "{{ states(var_estrategia) if var_estrategia != {} else 'Equitativo (50/50)' }}"
                       pct_c1: "{{ (states(var_p_coche1) | float(50)) / 100.0 if var_p_coche1 != {} else 0.5 }}"
                       
+                      # REPARTO DINÁMICO E INTELIGENTE DE POTENCIA
+                      # Si un coche está completo (o no activo), el 100% de los amperios se asignan al coche que está cargando activo.
                       amps_c1: >-
-                        {% if num_connected_cars > 1 %}
+                        {% if not is_c1_active %}
+                          0
+                        {% elif num_active_cars > 1 %}
                           {% if estrategia_val == 'Prioridad (Coche 1)' %}
                             {{ calculated_amps }}
                           {% elif estrategia_val == 'Porcentaje Personalizado' %}
@@ -546,7 +584,9 @@ action:
                         {% endif %}
 
                       amps_c2: >-
-                        {% if num_connected_cars > 1 %}
+                        {% if not is_c2_active %}
+                          0
+                        {% elif num_active_cars > 1 %}
                           {% if estrategia_val == 'Prioridad (Coche 1)' %}
                             {{ [ (calculated_amps - (amps_c1 | int)), 0 ] | max }}
                           {% elif estrategia_val == 'Porcentaje Personalizado' %}
@@ -555,7 +595,7 @@ action:
                             {{ (calculated_amps / 2) | int(0) }}
                           {% endif %}
                         {% else %}
-                          0
+                          {{ calculated_amps }}
                         {% endif %}
 
                   - choose:
@@ -585,7 +625,7 @@ action:
                                         data: { value: 32 }
                                   - if:
                                       - condition: template
-                                        value_template: "{{ is_c1_connected and var_c1_num != {} }}"
+                                        value_template: "{{ is_c1_connected and var_c1_num != {} and (amps_c1 | float(0)) >= 6 }}"
                                     then:
                                       - variables:
                                           c1_min: "{{ state_attr(c1_num_ent, 'min') | float(0) if state_attr(c1_num_ent, 'min') is not none else 0 }}"
@@ -685,7 +725,7 @@ action:
                               - if:
                                   - condition: template
                                     value_template: "{{ (states(wb_num_ent) | float(0)) != (safe_wb_amps | float(0)) }}"
-                                then:
+                                me:
                                   - service: number.set_value
                                     target: !input wallbox_current_number
                                     data:
