@@ -725,7 +725,7 @@ action:
                               - if:
                                   - condition: template
                                     value_template: "{{ (states(wb_num_ent) | float(0)) != (safe_wb_amps | float(0)) }}"
-                                me:
+                                then:
                                   - service: number.set_value
                                     target: !input wallbox_current_number
                                     data:
