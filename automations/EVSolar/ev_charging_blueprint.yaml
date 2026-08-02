@@ -1,10 +1,9 @@
 blueprint:
   name: "EV Smart"
   description: >
-    Control de carga avanzado para VE en 4 modos (Apagado, Manual, Tarifa Nocturna/Finde, Solar).
-    Sistema híbrido inteligente: Asocia sensores de cable independientes para cada Vehículo y para el Wallbox.
-    Si detecta un coche integrado (ej. Tesla), actúa sobre su API. Si detecta un coche invitado (amigo), 
-    actúa directamente sobre el Wallbox Raedian. Incluye Protección Dinámica (10kW / 3.5kW) y Balanceador Multi-Vehículo.
+    Control de carga avanzado para VE. Incluye modo Automático (Solar de día / Nocturno de noche),
+    Manual, Solar y Nocturno. Configuración del signo de inyección a red para Meter GoodWe,
+    Protección Dinámica (10kW / 3.5kW) y Balanceador Multi-Vehículo.
   domain: automation
   input:
     # --- VEHÍCULO 1 (ej. Tesla Propio) ---
@@ -82,6 +81,17 @@ blueprint:
         target:
           entity:
             - domain: number
+
+    # --- CONFIGURACIÓN DE MEDIDOR GOODWE ---
+    net_power_sign:
+      name: "↕️ Signo del Meter al Exportar/Inyectar Solar a la Red"
+      description: "¿Cómo marca tu medidor Meter 2 de GoodWe cuando regalas/exportas energía a la red? (Selecciona Positiva (+) si marca +2500W al inyectar)."
+      default: "Positiva (+)"
+      selector:
+        select:
+          options:
+            - "Positiva (+)"
+            - "Negativa (-)"
 
     # --- CONFIGURACIÓN DE MODOS Y POTENCIAS ---
     modo_carga_select:
@@ -210,6 +220,7 @@ variables:
   var_wb_cable: !input wallbox_cable_sensor
   var_c1_cable: !input car_1_cable_sensor
   var_c2_cable: !input car_2_cable_sensor
+  var_sign_setting: !input net_power_sign
   var_modo: !input modo_carga_select
   var_estrategia: !input estrategia_reparto_select
   var_p_coche1: !input porcentaje_coche_1_input
@@ -273,7 +284,23 @@ action:
 
       any_cable_connected: "{{ is_wb_connected or is_c1_connected or is_c2_connected }}"
       has_known_car_connected: "{{ is_c1_connected or is_c2_connected }}"
-      is_guest_car: "{{ is_wb_connected and not has_known_car_connected }}"
+
+      # EVALUACIÓN DE MODO EFECTIVO (Soporta modo Automático)
+      raw_modo_str: "{{ states(var_modo) }}"
+      
+      es_finde: "{{ now().weekday() in [5, 6] }}"
+      t_now: "{{ now().strftime('%H:%M:%S') }}"
+      t_start: "{{ states(var_h_inicio) }}"
+      t_end: "{{ states(var_h_fin) }}"
+      en_tramo_nocturno: "{{ (t_now >= t_start or t_now <= t_end) if (t_start > t_end) else (t_now >= t_start and t_now <= t_end) }}"
+      es_horario_nocturno: "{{ es_finde or en_tramo_nocturno }}"
+
+      effective_modo: >-
+        {% if 'Automático' in raw_modo_str %}
+          {{ 'Nocturno / Finde' if es_horario_nocturno else 'Solar' }}
+        {% else %}
+          {{ raw_modo_str }}
+        {% endif %}
 
   # 2. FILTRO GENERAL DE CABLE
   - choose:
@@ -281,7 +308,7 @@ action:
           - condition: template
             value_template: "{{ any_cable_connected }}"
         sequence:
-          # --- CÁLCULO DE PROTECCIÓN DE POTENCIA DINÁMICA (10 kW vs 3.5 kW) ---
+          # --- CÁLCULO DE PROTECCIÓN DE POTENCIA DINÁMICA Y EXCEDENTES DE RED ---
           - variables:
               pv_w: "{{ states(var_pv_power) | float(0) }}"
               soc_val: "{{ states(var_soc) | float(0) }}"
@@ -291,9 +318,13 @@ action:
               limit_grid_only_w: "{{ states(var_max_grid_w) | float(3500) if var_max_grid_w != {} else 3500 }}"
               
               effective_house_limit_w: "{{ limit_combined_w if has_energy_support else limit_grid_only_w }}"
-              grid_power_w: "{{ states(var_net_power) | float(0) }}"
               
-              available_grid_margin_w: "{{ [ (effective_house_limit_w - grid_power_w), 0 ] | max }}"
+              # LECTURA CON CORRECCIÓN DE SIGNO DEL METER GOODWE
+              raw_grid_w: "{{ states(var_net_power) | float(0) }}"
+              # Si el usuario seleccionó 'Positiva (+)', convertimos +2500W a -2500W para que Jinja sepa que es exportación
+              net_power_w: "{{ (raw_grid_w * -1) if var_sign_setting == 'Positiva (+)' else raw_grid_w }}"
+              
+              available_grid_margin_w: "{{ [ (effective_house_limit_w - (raw_grid_w if var_sign_setting == 'Positiva (+)' else (raw_grid_w * -1))), 0 ] | max }}"
               max_safe_amps: "{{ (available_grid_margin_w / 230) | int(0) }}"
 
           # --- GESTIÓN DE MODOS Y EJECUCIÓN ---
@@ -303,7 +334,7 @@ action:
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
-                    value_template: "{{ is_state(var_modo, 'Manual') }}"
+                    value_template: "{{ effective_modo == 'Manual' }}"
                 sequence:
                   - variables:
                       target_amps: "{{ [ (states(var_amp_manual) | float(16)), max_safe_amps ] | min }}"
@@ -339,18 +370,12 @@ action:
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
-                    value_template: "{{ is_state(var_modo, 'Nocturno / Finde') }}"
+                    value_template: "{{ effective_modo == 'Nocturno / Finde' }}"
                 sequence:
                   - choose:
                       - conditions:
                           - condition: template
-                            value_template: >-
-                              {% set es_finde = now().weekday() in [5, 6] %}
-                              {% set t_now = now().strftime('%H:%M:%S') %}
-                              {% set t_start = states(var_h_inicio) %}
-                              {% set t_end = states(var_h_fin) %}
-                              {% set en_tramo_nocturno = (t_now >= t_start or t_now <= t_end) if (t_start > t_end) else (t_now >= t_start and t_now <= t_end) %}
-                              {{ es_finde or en_tramo_nocturno }}
+                            value_template: "{{ es_horario_nocturno }}"
                         sequence:
                           - variables:
                               target_amps: "{{ [ (states(var_amp_nocturna) | float(16)), max_safe_amps ] | min }}"
@@ -391,11 +416,11 @@ action:
                             target: !input car_1_switch
 
               # -------------------------------------------------------------
-              # MODO 3: SOLAR
+              # MODO 3: SOLAR (EXCEDENTES)
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
-                    value_template: "{{ is_state(var_modo, 'Solar') }}"
+                    value_template: "{{ effective_modo == 'Solar' }}"
                 sequence:
                   - variables:
                       min_charge_sec: "{{ (states(var_min_charge_m) | float(5)) * 60 }}"
@@ -407,9 +432,9 @@ action:
                       min_soc_req: "{{ states(var_min_soc) | float(80) }}"
                       soc_ok: "{{ current_soc >= min_soc_req }}"
                       
-                      net_power_w: "{{ states(var_net_power) | float(0) }}"
                       bat_power_w: "{{ states(var_bat_power) | float(0) if var_bat_power != [] else 0 }}"
                       
+                      # EXCEDENTE DE RED: Si net_power_w es negativo (<0), su valor absoluto es el excedente
                       exported_surplus_w: "{{ (net_power_w * -1) if net_power_w < 0 else 0 }}"
                       battery_charge_surplus_w: "{{ (bat_power_w * -1) if (soc_ok and bat_power_w < 0) else 0 }}"
                       
@@ -500,7 +525,7 @@ action:
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
-                    value_template: "{{ is_state(var_modo, 'Apagado') }}"
+                    value_template: "{{ effective_modo == 'Apagado' }}"
                 sequence:
                   - service: switch.turn_off
                     target: !input wallbox_switch
