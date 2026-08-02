@@ -7,36 +7,11 @@ blueprint:
     actúa directamente sobre el Wallbox Raedian. Incluye Protección Dinámica (10kW / 3.5kW) y Balanceador Multi-Vehículo.
   domain: automation
   input:
-    # --- DOCK / WALLBOX ---
-    wallbox_cable_sensor:
-      name: "🔌 Sensor de Cable del Wallbox (Raedian Status Connector)"
-      description: "Sensor de estado del cargador (ej. Status Connector de Raedian)."
-      default: {}
-      selector:
-        entity:
-          domain: [sensor, binary_sensor]
-
-    wallbox_switch:
-      name: "🔌 Switch del Cargador (Wallbox Raedian)"
-      description: "Switch principal para encender/apagar el Wallbox."
-      selector:
-        target:
-          entity:
-            - domain: switch
-
-    wallbox_current_number:
-      name: "⚙️ Amperaje del Cargador (Wallbox Raedian)"
-      description: "Número de amperios del Wallbox."
-      selector:
-        target:
-          entity:
-            - domain: number
-
     # --- VEHÍCULO 1 (ej. Tesla Propio) ---
     car_1_cable_sensor:
       name: "🚗 Sensor de Cable - Coche 1 (Tesla)"
-      description: "binary_sensor de cable enchufado del Coche 1."
-      default: {}
+      description: "Sensor o binary_sensor del coche que indica si el cable está conectado (ej. garaje_nafnaf_cable_de_carga)."
+      default: binary_sensor.garaje_nafnaf_cable_de_carga
       selector:
         entity:
           domain: [sensor, binary_sensor]
@@ -53,6 +28,31 @@ blueprint:
     car_1_current_number:
       name: "⚙️ Amperaje - Coche 1 (Tesla Current Number)"
       default: {}
+      selector:
+        target:
+          entity:
+            - domain: number
+
+    # --- DOCK / WALLBOX ---
+    wallbox_cable_sensor:
+      name: "🔌 Sensor de Cable del Wallbox (Status Connector - Opcional)"
+      description: "Sensor de estado del cargador en la integración OCPP (ej. Status Connector). Déjalo vacío si no tienes esta entidad."
+      default: {}
+      selector:
+        entity:
+          domain: [sensor, binary_sensor]
+
+    wallbox_switch:
+      name: "🔌 Switch del Cargador (Wallbox Raedian)"
+      description: "Switch principal para encender/apagar el Wallbox."
+      selector:
+        target:
+          entity:
+            - domain: switch
+
+    wallbox_current_number:
+      name: "⚙️ Amperaje del Cargador (Wallbox Raedian)"
+      description: "Número de amperios del Wallbox."
       selector:
         target:
           entity:
@@ -260,16 +260,16 @@ trigger:
 action:
   # 1. EVALUACIÓN INTELIGENTE DE CABLES CONECTADOS
   - variables:
-      wb_val: "{{ states(var_wb_cable) if var_wb_cable != {} else 'unavailable' }}"
-      c1_val: "{{ states(var_c1_cable) if var_c1_cable != {} else 'unavailable' }}"
-      c2_val: "{{ states(var_c2_cable) if var_c2_cable != {} else 'unavailable' }}"
+      wb_val: "{{ (states(var_wb_cable) | lower) if var_wb_cable != {} else 'unavailable' }}"
+      c1_val: "{{ (states(var_c1_cable) | lower) if var_c1_cable != {} else 'unavailable' }}"
+      c2_val: "{{ (states(var_c2_cable) | lower) if var_c2_cable != {} else 'unavailable' }}"
 
       is_wb_connected: >-
-        {{ wb_val in ['on', 'true', 'Conectado', 'connected', 'Preparing', 'Charging', 'SuspendedEV', 'SuspendedEVSE', 'Occupied', 'Finishing'] }}
+        {{ wb_val in ['on', 'true', 'conectado', 'connected', 'preparing', 'charging', 'suspendedev', 'suspendedevse', 'occupied', 'finishing', '1'] }}
       is_c1_connected: >-
-        {{ c1_val in ['on', 'true', 'Conectado', 'connected'] }}
+        {{ c1_val in ['on', 'true', 'conectado', 'connected', 'charging', 'pluggedin', '1'] }}
       is_c2_connected: >-
-        {{ c2_val in ['on', 'true', 'Conectado', 'connected'] }}
+        {{ c2_val in ['on', 'true', 'conectado', 'connected', 'charging', 'pluggedin', '1'] }}
 
       any_cable_connected: "{{ is_wb_connected or is_c1_connected or is_c2_connected }}"
       has_known_car_connected: "{{ is_c1_connected or is_c2_connected }}"
