@@ -3,8 +3,8 @@ blueprint:
   description: >
     Control de carga avanzado para VE. Incluye modo Automático (Solar de día / Nocturno de noche),
     Manual, Solar y Nocturno. Configuración del signo de inyección a red para Meter GoodWe,
-    Protección Dinámica (10kW / 3.5kW) y Balanceador Multi-Vehículo. 
-    Lógica idempotente anti-API rate limit para evitar errores Tesla 'is_charging'.
+    Protección Dinámica (10kW / 3.5kW), Detección de Vehículo Único (100% potencia si hay solo 1 coche),
+    Banda muerta anti-flapping (evita oscilaciones 9A-10A) y Lógica idempotente anti-API Tesla.
   domain: automation
   input:
     # --- VEHÍCULO 1 (ej. Tesla Propio) ---
@@ -139,7 +139,7 @@ blueprint:
       name: "🌙 Selector Amperios Nocturna"
       selector:
         entity:
-          domain: input_datetime
+          domain: input_number
 
     hora_inicio_nocturna_input:
       name: "⏰ Hora Inicio Nocturna"
@@ -285,6 +285,7 @@ action:
 
       any_cable_connected: "{{ is_wb_connected or is_c1_connected or is_c2_connected }}"
       has_known_car_connected: "{{ is_c1_connected or is_c2_connected }}"
+      num_connected_cars: "{{ (1 if is_c1_connected else 0) + (1 if is_c2_connected else 0) }}"
 
       raw_modo_str: "{{ states(var_modo) }}"
       es_finde: "{{ now().weekday() in [5, 6] }}"
@@ -523,22 +524,32 @@ action:
                       estrategia_val: "{{ states(var_estrategia) if var_estrategia != {} else 'Equitativo (50/50)' }}"
                       pct_c1: "{{ (states(var_p_coche1) | float(50)) / 100.0 if var_p_coche1 != {} else 0.5 }}"
                       
+                      # REPARTO DINÁMICO: Si solo hay 1 coche conectado, recibe el 100% de los amperios calculados.
+                      # Solo divide si hay más de 1 coche conectado simultáneamente.
                       amps_c1: >-
-                        {% if estrategia_val == 'Prioridad (Coche 1)' %}
-                          {{ calculated_amps }}
-                        {% elif estrategia_val == 'Porcentaje Personalizado' %}
-                          {{ (calculated_amps * pct_c1) | int(0) }}
+                        {% if num_connected_cars > 1 %}
+                          {% if estrategia_val == 'Prioridad (Coche 1)' %}
+                            {{ calculated_amps }}
+                          {% elif estrategia_val == 'Porcentaje Personalizado' %}
+                            {{ (calculated_amps * pct_c1) | int(0) }}
+                          {% else %}
+                            {{ (calculated_amps / 2) | int(0) }}
+                          {% endif %}
                         {% else %}
-                          {{ (calculated_amps / 2) | int(0) }}
+                          {{ calculated_amps }}
                         {% endif %}
 
                       amps_c2: >-
-                        {% if estrategia_val == 'Prioridad (Coche 1)' %}
-                          {{ [ (calculated_amps - (amps_c1 | int)), 0 ] | max }}
-                        {% elif estrategia_val == 'Porcentaje Personalizado' %}
-                          {{ (calculated_amps * (1 - pct_c1)) | int(0) }}
+                        {% if num_connected_cars > 1 %}
+                          {% if estrategia_val == 'Prioridad (Coche 1)' %}
+                            {{ [ (calculated_amps - (amps_c1 | int)), 0 ] | max }}
+                          {% elif estrategia_val == 'Porcentaje Personalizado' %}
+                            {{ (calculated_amps * (1 - pct_c1)) | int(0) }}
+                          {% else %}
+                            {{ (calculated_amps / 2) | int(0) }}
+                          {% endif %}
                         {% else %}
-                          {{ (calculated_amps / 2) | int(0) }}
+                          0
                         {% endif %}
 
                   - choose:
@@ -575,7 +586,13 @@ action:
                                       - variables:
                                           c1_min: "{{ state_attr(c1_num_ent, 'min') | float(0) if state_attr(c1_num_ent, 'min') is not none else 0 }}"
                                           c1_max: "{{ state_attr(c1_num_ent, 'max') | float(32) if state_attr(c1_num_ent, 'max') is not none else 32 }}"
-                                          target_c1: "{{ [amps_c1 | float(6), 6] | max }}"
+                                          raw_target_c1: "{{ [amps_c1 | float(6), 6] | max }}"
+                                          
+                                          # BANDA MUERTA DE 1A PARA EVITAR FLAPPING (EJ. BAILOS 9A-10A)
+                                          curr_c1_a: "{{ states(c1_num_ent) | float(0) }}"
+                                          diff_c1: "{{ (raw_target_c1 - curr_c1_a) | abs }}"
+                                          target_c1: "{{ curr_c1_a if (diff_c1 < 2 and curr_c1_a >= 6) else raw_target_c1 }}"
+                                          
                                           safe_c1_amps: "{{ [ [target_c1, c1_min] | max, c1_max ] | min }}"
                                       - if:
                                           - condition: template
@@ -598,7 +615,12 @@ action:
                                       - variables:
                                           c2_min: "{{ state_attr(c2_num_ent, 'min') | float(0) if state_attr(c2_num_ent, 'min') is not none else 0 }}"
                                           c2_max: "{{ state_attr(c2_num_ent, 'max') | float(32) if state_attr(c2_num_ent, 'max') is not none else 32 }}"
-                                          target_c2: "{{ [amps_c2 | float(6), 6] | max }}"
+                                          raw_target_c2: "{{ [amps_c2 | float(6), 6] | max }}"
+                                          
+                                          curr_c2_a: "{{ states(c2_num_ent) | float(0) }}"
+                                          diff_c2: "{{ (raw_target_c2 - curr_c2_a) | abs }}"
+                                          target_c2: "{{ curr_c2_a if (diff_c2 < 2 and curr_c2_a >= 6) else raw_target_c2 }}"
+                                          
                                           safe_c2_amps: "{{ [ [target_c2, c2_min] | max, c2_max ] | min }}"
                                       - if:
                                           - condition: template
@@ -625,7 +647,12 @@ action:
                               - variables:
                                   wb_min: "{{ state_attr(wb_num_ent, 'min') | float(6) if state_attr(wb_num_ent, 'min') is not none else 6 }}"
                                   wb_max: "{{ state_attr(wb_num_ent, 'max') | float(32) if state_attr(wb_num_ent, 'max') is not none else 32 }}"
-                                  target_wb: "{{ [calculated_amps, 6] | max }}"
+                                  raw_target_wb: "{{ [calculated_amps, 6] | max }}"
+                                  
+                                  curr_wb_a: "{{ states(wb_num_ent) | float(0) }}"
+                                  diff_wb: "{{ (raw_target_wb - curr_wb_a) | abs }}"
+                                  target_wb: "{{ curr_wb_a if (diff_wb < 2 and curr_wb_a >= 6) else raw_target_wb }}"
+                                  
                                   safe_wb_amps: "{{ [ [target_wb, wb_min] | max, wb_max ] | min }}"
                               - if:
                                   - condition: template
