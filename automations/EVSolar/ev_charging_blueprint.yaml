@@ -3,7 +3,8 @@ blueprint:
   description: >
     Control de carga avanzado para VE. Incluye modo Automático (Solar de día / Nocturno de noche),
     Manual, Solar y Nocturno. Configuración del signo de inyección a red para Meter GoodWe,
-    Protección Dinámica (10kW / 3.5kW) y Balanceador Multi-Vehículo.
+    Protección Dinámica (10kW / 3.5kW) y Balanceador Multi-Vehículo. 
+    Lógica idempotente anti-API rate limit para evitar errores Tesla 'is_charging'.
   domain: automation
   input:
     # --- VEHÍCULO 1 (ej. Tesla Propio) ---
@@ -138,7 +139,7 @@ blueprint:
       name: "🌙 Selector Amperios Nocturna"
       selector:
         entity:
-          domain: input_number
+          domain: input_datetime
 
     hora_inicio_nocturna_input:
       name: "⏰ Hora Inicio Nocturna"
@@ -300,6 +301,16 @@ action:
           {{ raw_modo_str }}
         {% endif %}
 
+      # EXTRAER IDs DE ENTIDADES PARA VERIFICACIÓN DE ESTADO PREVIO (EVITAR TRAP API TESLA)
+      c1_sw_ent: "{{ var_c1_sw.entity_id[0] if var_c1_sw.entity_id is defined and var_c1_sw.entity_id is list else (var_c1_sw.entity_id if var_c1_sw.entity_id is defined else var_c1_sw) }}"
+      c1_num_ent: "{{ var_c1_num.entity_id[0] if var_c1_num.entity_id is defined and var_c1_num.entity_id is list else (var_c1_num.entity_id if var_c1_num.entity_id is defined else var_c1_num) }}"
+      
+      c2_sw_ent: "{{ var_c2_sw.entity_id[0] if var_c2_sw.entity_id is defined and var_c2_sw.entity_id is list else (var_c2_sw.entity_id if var_c2_sw.entity_id is defined else var_c2_sw) }}"
+      c2_num_ent: "{{ var_c2_num.entity_id[0] if var_c2_num.entity_id is defined and var_c2_num.entity_id is list else (var_c2_num.entity_id if var_c2_num.entity_id is defined else var_c2_num) }}"
+
+      wb_sw_ent: "{{ var_wb_sw.entity_id[0] if var_wb_sw.entity_id is defined and var_wb_sw.entity_id is list else (var_wb_sw.entity_id if var_wb_sw.entity_id is defined else var_wb_sw) }}"
+      wb_num_ent: "{{ var_wb_num.entity_id[0] if var_wb_num.entity_id is defined and var_wb_num.entity_id is list else (var_wb_num.entity_id if var_wb_num.entity_id is defined else var_wb_num) }}"
+
   # 2. FILTRO GENERAL DE CABLE
   - choose:
       - conditions:
@@ -340,38 +351,59 @@ action:
                           - condition: template
                             value_template: "{{ has_known_car_connected }}"
                         sequence:
-                          - service: switch.turn_on
-                            target: !input wallbox_switch
-                          - service: number.set_value
-                            target: !input wallbox_current_number
-                            data: { value: 32 }
+                          - if:
+                              - condition: template
+                                value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
+                            then:
+                              - service: switch.turn_on
+                                target: !input wallbox_switch
+                          - if:
+                              - condition: template
+                                value_template: "{{ (states(wb_num_ent) | float(0)) != 32 }}"
+                            then:
+                              - service: number.set_value
+                                target: !input wallbox_current_number
+                                data: { value: 32 }
                           - if:
                               - condition: template
                                 value_template: "{{ is_c1_connected and var_c1_num != {} }}"
                             then:
-                              # ENCENDER PRIMERO EL COCHE PARA DESBLOQUEAR LA ENTIDAD NUMBER DE TESLA
-                              - service: switch.turn_on
-                                target: !input car_1_switch
                               - variables:
-                                  c1_ent: "{{ var_c1_num.entity_id[0] if var_c1_num.entity_id is defined and var_c1_num.entity_id is list else (var_c1_num.entity_id if var_c1_num.entity_id is defined else var_c1_num) }}"
-                                  c1_min: "{{ state_attr(c1_ent, 'min') | float(0) if state_attr(c1_ent, 'min') is not none else 0 }}"
-                                  c1_max: "{{ state_attr(c1_ent, 'max') | float(32) if state_attr(c1_ent, 'max') is not none else 32 }}"
+                                  c1_min: "{{ state_attr(c1_num_ent, 'min') | float(0) if state_attr(c1_num_ent, 'min') is not none else 0 }}"
+                                  c1_max: "{{ state_attr(c1_num_ent, 'max') | float(32) if state_attr(c1_num_ent, 'max') is not none else 32 }}"
                                   safe_c1_amps: "{{ [ [desired_amps, c1_min] | max, c1_max ] | min }}"
-                              - service: number.set_value
-                                target: !input car_1_current_number
-                                data: { value: "{{ safe_c1_amps }}" }
+                              - if:
+                                  - condition: template
+                                    value_template: "{{ not is_state(c1_sw_ent, 'on') }}"
+                                then:
+                                  - service: switch.turn_on
+                                    target: !input car_1_switch
+                              - if:
+                                  - condition: template
+                                    value_template: "{{ (states(c1_num_ent) | float(0)) != (safe_c1_amps | float(0)) }}"
+                                then:
+                                  - service: number.set_value
+                                    target: !input car_1_current_number
+                                    data: { value: "{{ safe_c1_amps }}" }
 
                     default:
-                      - service: switch.turn_on
-                        target: !input wallbox_switch
+                      - if:
+                          - condition: template
+                            value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
+                        then:
+                          - service: switch.turn_on
+                            target: !input wallbox_switch
                       - variables:
-                          wb_ent: "{{ var_wb_num.entity_id[0] if var_wb_num.entity_id is defined and var_wb_num.entity_id is list else (var_wb_num.entity_id if var_wb_num.entity_id is defined else var_wb_num) }}"
-                          wb_min: "{{ state_attr(wb_ent, 'min') | float(6) if state_attr(wb_ent, 'min') is not none else 6 }}"
-                          wb_max: "{{ state_attr(wb_ent, 'max') | float(32) if state_attr(wb_ent, 'max') is not none else 32 }}"
+                          wb_min: "{{ state_attr(wb_num_ent, 'min') | float(6) if state_attr(wb_num_ent, 'min') is not none else 6 }}"
+                          wb_max: "{{ state_attr(wb_num_ent, 'max') | float(32) if state_attr(wb_num_ent, 'max') is not none else 32 }}"
                           safe_wb_amps: "{{ [ [desired_amps, wb_min] | max, wb_max ] | min }}"
-                      - service: number.set_value
-                        target: !input wallbox_current_number
-                        data: { value: "{{ safe_wb_amps }}" }
+                      - if:
+                          - condition: template
+                            value_template: "{{ (states(wb_num_ent) | float(0)) != (safe_wb_amps | float(0)) }}"
+                        then:
+                          - service: number.set_value
+                            target: !input wallbox_current_number
+                            data: { value: "{{ safe_wb_amps }}" }
 
               # -------------------------------------------------------------
               # MODO 2: NOCTURNO / FINDE
@@ -393,44 +425,70 @@ action:
                                   - condition: template
                                     value_template: "{{ has_known_car_connected }}"
                                 sequence:
-                                  - service: switch.turn_on
-                                    target: !input wallbox_switch
-                                  - service: number.set_value
-                                    target: !input wallbox_current_number
-                                    data: { value: 32 }
+                                  - if:
+                                      - condition: template
+                                        value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
+                                    then:
+                                      - service: switch.turn_on
+                                        target: !input wallbox_switch
+                                  - if:
+                                      - condition: template
+                                        value_template: "{{ (states(wb_num_ent) | float(0)) != 32 }}"
+                                    then:
+                                      - service: number.set_value
+                                        target: !input wallbox_current_number
+                                        data: { value: 32 }
                                   - if:
                                       - condition: template
                                         value_template: "{{ is_c1_connected and var_c1_num != {} }}"
                                     then:
-                                      - service: switch.turn_on
-                                        target: !input car_1_switch
                                       - variables:
-                                          c1_ent: "{{ var_c1_num.entity_id[0] if var_c1_num.entity_id is defined and var_c1_num.entity_id is list else (var_c1_num.entity_id if var_c1_num.entity_id is defined else var_c1_num) }}"
-                                          c1_min: "{{ state_attr(c1_ent, 'min') | float(0) if state_attr(c1_ent, 'min') is not none else 0 }}"
-                                          c1_max: "{{ state_attr(c1_ent, 'max') | float(32) if state_attr(c1_ent, 'max') is not none else 32 }}"
+                                          c1_min: "{{ state_attr(c1_num_ent, 'min') | float(0) if state_attr(c1_num_ent, 'min') is not none else 0 }}"
+                                          c1_max: "{{ state_attr(c1_num_ent, 'max') | float(32) if state_attr(c1_num_ent, 'max') is not none else 32 }}"
                                           safe_c1_amps: "{{ [ [desired_amps, c1_min] | max, c1_max ] | min }}"
-                                      - service: number.set_value
-                                        target: !input car_1_current_number
-                                        data: { value: "{{ safe_c1_amps }}" }
+                                      - if:
+                                          - condition: template
+                                            value_template: "{{ not is_state(c1_sw_ent, 'on') }}"
+                                        then:
+                                          - service: switch.turn_on
+                                            target: !input car_1_switch
+                                      - if:
+                                          - condition: template
+                                            value_template: "{{ (states(c1_num_ent) | float(0)) != (safe_c1_amps | float(0)) }}"
+                                        then:
+                                          - service: number.set_value
+                                            target: !input car_1_current_number
+                                            data: { value: "{{ safe_c1_amps }}" }
 
                             default:
-                              - service: switch.turn_on
-                                target: !input wallbox_switch
+                              - if:
+                                  - condition: template
+                                    value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
+                                then:
+                                  - service: switch.turn_on
+                                    target: !input wallbox_switch
                               - variables:
-                                  wb_ent: "{{ var_wb_num.entity_id[0] if var_wb_num.entity_id is defined and var_wb_num.entity_id is list else (var_wb_num.entity_id if var_wb_num.entity_id is defined else var_wb_num) }}"
-                                  wb_min: "{{ state_attr(wb_ent, 'min') | float(6) if state_attr(wb_ent, 'min') is not none else 6 }}"
-                                  wb_max: "{{ state_attr(wb_ent, 'max') | float(32) if state_attr(wb_ent, 'max') is not none else 32 }}"
+                                  wb_min: "{{ state_attr(wb_num_ent, 'min') | float(6) if state_attr(wb_num_ent, 'min') is not none else 6 }}"
+                                  wb_max: "{{ state_attr(wb_num_ent, 'max') | float(32) if state_attr(wb_num_ent, 'max') is not none else 32 }}"
                                   safe_wb_amps: "{{ [ [desired_amps, wb_min] | max, wb_max ] | min }}"
-                              - service: number.set_value
-                                target: !input wallbox_current_number
-                                data: { value: "{{ safe_wb_amps }}" }
+                              - if:
+                                  - condition: template
+                                    value_template: "{{ (states(wb_num_ent) | float(0)) != (safe_wb_amps | float(0)) }}"
+                                then:
+                                  - service: number.set_value
+                                    target: !input wallbox_current_number
+                                    data: { value: "{{ safe_wb_amps }}" }
 
                     default:
-                      - service: switch.turn_off
-                        target: !input wallbox_switch
                       - if:
                           - condition: template
-                            value_template: "{{ var_c1_sw != {} }}"
+                            value_template: "{{ not is_state(wb_sw_ent, 'off') }}"
+                        then:
+                          - service: switch.turn_off
+                            target: !input wallbox_switch
+                      - if:
+                          - condition: template
+                            value_template: "{{ var_c1_sw != {} and not is_state(c1_sw_ent, 'off') }}"
                         then:
                           - service: switch.turn_off
                             target: !input car_1_switch
@@ -497,67 +555,97 @@ action:
                                   - condition: template
                                     value_template: "{{ has_known_car_connected }}"
                                 sequence:
-                                  - service: switch.turn_on
-                                    target: !input wallbox_switch
-                                  - service: number.set_value
-                                    target: !input wallbox_current_number
-                                    data: { value: 32 }
+                                  - if:
+                                      - condition: template
+                                        value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
+                                    then:
+                                      - service: switch.turn_on
+                                        target: !input wallbox_switch
+                                  - if:
+                                      - condition: template
+                                        value_template: "{{ (states(wb_num_ent) | float(0)) != 32 }}"
+                                    then:
+                                      - service: number.set_value
+                                        target: !input wallbox_current_number
+                                        data: { value: 32 }
                                   - if:
                                       - condition: template
                                         value_template: "{{ is_c1_connected and var_c1_num != {} }}"
                                     then:
-                                      # 1. ENCENDER SWITCH DEL TESLA PRIMERO
-                                      - service: switch.turn_on
-                                        target: !input car_1_switch
-                                      # 2. LER LIMITES DE LA ENTIDAD NUMBER PARA EVITAR OUT_OF_RANGE
                                       - variables:
-                                          c1_ent: "{{ var_c1_num.entity_id[0] if var_c1_num.entity_id is defined and var_c1_num.entity_id is list else (var_c1_num.entity_id if var_c1_num.entity_id is defined else var_c1_num) }}"
-                                          c1_min: "{{ state_attr(c1_ent, 'min') | float(0) if state_attr(c1_ent, 'min') is not none else 0 }}"
-                                          c1_max: "{{ state_attr(c1_ent, 'max') | float(32) if state_attr(c1_ent, 'max') is not none else 32 }}"
+                                          c1_min: "{{ state_attr(c1_num_ent, 'min') | float(0) if state_attr(c1_num_ent, 'min') is not none else 0 }}"
+                                          c1_max: "{{ state_attr(c1_num_ent, 'max') | float(32) if state_attr(c1_num_ent, 'max') is not none else 32 }}"
                                           target_c1: "{{ [amps_c1 | float(6), 6] | max }}"
                                           safe_c1_amps: "{{ [ [target_c1, c1_min] | max, c1_max ] | min }}"
-                                      # 3. ESTABLECER VALOR DE CORRIENTE
-                                      - service: number.set_value
-                                        target: !input car_1_current_number
-                                        data:
-                                          value: "{{ safe_c1_amps }}"
+                                      - if:
+                                          - condition: template
+                                            value_template: "{{ not is_state(c1_sw_ent, 'on') }}"
+                                        then:
+                                          - service: switch.turn_on
+                                            target: !input car_1_switch
+                                      - if:
+                                          - condition: template
+                                            value_template: "{{ (states(c1_num_ent) | float(0)) != (safe_c1_amps | float(0)) }}"
+                                        then:
+                                          - service: number.set_value
+                                            target: !input car_1_current_number
+                                            data:
+                                              value: "{{ safe_c1_amps }}"
                                   - if:
                                       - condition: template
                                         value_template: "{{ is_c2_connected and var_c2_num != {} and (amps_c2 | float(0)) >= 6 }}"
                                     then:
-                                      - service: switch.turn_on
-                                        target: !input car_2_switch
                                       - variables:
-                                          c2_ent: "{{ var_c2_num.entity_id[0] if var_c2_num.entity_id is defined and var_c2_num.entity_id is list else (var_c2_num.entity_id if var_c2_num.entity_id is defined else var_c2_num) }}"
-                                          c2_min: "{{ state_attr(c2_ent, 'min') | float(0) if state_attr(c2_ent, 'min') is not none else 0 }}"
-                                          c2_max: "{{ state_attr(c2_ent, 'max') | float(32) if state_attr(c2_ent, 'max') is not none else 32 }}"
+                                          c2_min: "{{ state_attr(c2_num_ent, 'min') | float(0) if state_attr(c2_num_ent, 'min') is not none else 0 }}"
+                                          c2_max: "{{ state_attr(c2_num_ent, 'max') | float(32) if state_attr(c2_num_ent, 'max') is not none else 32 }}"
                                           target_c2: "{{ [amps_c2 | float(6), 6] | max }}"
                                           safe_c2_amps: "{{ [ [target_c2, c2_min] | max, c2_max ] | min }}"
-                                      - service: number.set_value
-                                        target: !input car_2_current_number
-                                        data:
-                                          value: "{{ safe_c2_amps }}"
+                                      - if:
+                                          - condition: template
+                                            value_template: "{{ not is_state(c2_sw_ent, 'on') }}"
+                                        then:
+                                          - service: switch.turn_on
+                                            target: !input car_2_switch
+                                      - if:
+                                          - condition: template
+                                            value_template: "{{ (states(c2_num_ent) | float(0)) != (safe_c2_amps | float(0)) }}"
+                                        then:
+                                          - service: number.set_value
+                                            target: !input car_2_current_number
+                                            data:
+                                              value: "{{ safe_c2_amps }}"
 
                             default:
-                              - service: switch.turn_on
-                                target: !input wallbox_switch
+                              - if:
+                                  - condition: template
+                                    value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
+                                then:
+                                  - service: switch.turn_on
+                                    target: !input wallbox_switch
                               - variables:
-                                  wb_ent: "{{ var_wb_num.entity_id[0] if var_wb_num.entity_id is defined and var_wb_num.entity_id is list else (var_wb_num.entity_id if var_wb_num.entity_id is defined else var_wb_num) }}"
-                                  wb_min: "{{ state_attr(wb_ent, 'min') | float(6) if state_attr(wb_ent, 'min') is not none else 6 }}"
-                                  wb_max: "{{ state_attr(wb_ent, 'max') | float(32) if state_attr(wb_ent, 'max') is not none else 32 }}"
+                                  wb_min: "{{ state_attr(wb_num_ent, 'min') | float(6) if state_attr(wb_num_ent, 'min') is not none else 6 }}"
+                                  wb_max: "{{ state_attr(wb_num_ent, 'max') | float(32) if state_attr(wb_num_ent, 'max') is not none else 32 }}"
                                   target_wb: "{{ [calculated_amps, 6] | max }}"
                                   safe_wb_amps: "{{ [ [target_wb, wb_min] | max, wb_max ] | min }}"
-                              - service: number.set_value
-                                target: !input wallbox_current_number
-                                data:
-                                  value: "{{ safe_wb_amps }}"
+                              - if:
+                                  - condition: template
+                                    value_template: "{{ (states(wb_num_ent) | float(0)) != (safe_wb_amps | float(0)) }}"
+                                then:
+                                  - service: number.set_value
+                                    target: !input wallbox_current_number
+                                    data:
+                                      value: "{{ safe_wb_amps }}"
 
                     default:
-                      - service: switch.turn_off
-                        target: !input wallbox_switch
                       - if:
                           - condition: template
-                            value_template: "{{ var_c1_sw != {} }}"
+                            value_template: "{{ not is_state(wb_sw_ent, 'off') }}"
+                        then:
+                          - service: switch.turn_off
+                            target: !input wallbox_switch
+                      - if:
+                          - condition: template
+                            value_template: "{{ var_c1_sw != {} and not is_state(c1_sw_ent, 'off') }}"
                         then:
                           - service: switch.turn_off
                             target: !input car_1_switch
@@ -569,38 +657,50 @@ action:
                   - condition: template
                     value_template: "{{ effective_modo == 'Apagado' }}"
                 sequence:
-                  - service: switch.turn_off
-                    target: !input wallbox_switch
                   - if:
                       - condition: template
-                        value_template: "{{ var_c1_sw != {} }}"
+                        value_template: "{{ not is_state(wb_sw_ent, 'off') }}"
+                    then:
+                      - service: switch.turn_off
+                        target: !input wallbox_switch
+                  - if:
+                      - condition: template
+                        value_template: "{{ var_c1_sw != {} and not is_state(c1_sw_ent, 'off') }}"
                     then:
                       - service: switch.turn_off
                         target: !input car_1_switch
 
             default:
-              - service: switch.turn_off
-                target: !input wallbox_switch
               - if:
                   - condition: template
-                    value_template: "{{ var_c1_sw != {} }}"
+                    value_template: "{{ not is_state(wb_sw_ent, 'off') }}"
+                then:
+                  - service: switch.turn_off
+                    target: !input wallbox_switch
+              - if:
+                  - condition: template
+                    value_template: "{{ var_c1_sw != {} and not is_state(c1_sw_ent, 'off') }}"
                 then:
                   - service: switch.turn_off
                     target: !input car_1_switch
 
     # SI NO HAY NINGÚN CABLE CONECTADO: Apagar todo
     default:
-      - service: switch.turn_off
-        target: !input wallbox_switch
       - if:
           - condition: template
-            value_template: "{{ var_c1_sw != {} }}"
+            value_template: "{{ not is_state(wb_sw_ent, 'off') }}"
+        then:
+          - service: switch.turn_off
+            target: !input wallbox_switch
+      - if:
+          - condition: template
+            value_template: "{{ var_c1_sw != {} and not is_state(c1_sw_ent, 'off') }}"
         then:
           - service: switch.turn_off
             target: !input car_1_switch
       - if:
           - condition: template
-            value_template: "{{ var_c2_sw != {} }}"
+            value_template: "{{ var_c2_sw != {} and not is_state(c2_sw_ent, 'off') }}"
         then:
           - service: switch.turn_off
             target: !input car_2_switch
