@@ -1,6 +1,6 @@
 blueprint:
   name: "EV Smart"
-  source_url: https://github.com/sdaf2/ha-blueprints/blob/main/automations/EVSolar/ev_charging_blueprint.yaml
+  source_url: https://raw.githubusercontent.com/sdaf2/ha-blueprints/main/automations/EVSolar/ev_charging_blueprint.yaml
   description: >
     Control de carga avanzado para VE. Incluye modo Automático (Solar de día / Nocturno de noche),
     Manual, Solar y Nocturno. Configuración del signo de inyección a red para Meter GoodWe,
@@ -307,7 +307,6 @@ action:
           {{ raw_modo_str }}
         {% endif %}
 
-      # EXTRAER IDs DE ENTIDADES PARA VERIFICACIÓN DE ESTADO PREVIO
       c1_sw_ent: "{{ var_c1_sw.entity_id[0] if var_c1_sw.entity_id is defined and var_c1_sw.entity_id is list else (var_c1_sw.entity_id if var_c1_sw.entity_id is defined else var_c1_sw) }}"
       c1_num_ent: "{{ var_c1_num.entity_id[0] if var_c1_num.entity_id is defined and var_c1_num.entity_id is list else (var_c1_num.entity_id if var_c1_num.entity_id is defined else var_c1_num) }}"
       
@@ -519,8 +518,6 @@ action:
                       pv_w: "{{ states(var_pv_power) | float(0) }}"
                       exported_surplus_w: "{{ (net_power_w * -1) if net_power_w < 0 else 0 }}"
                       
-                      # SI LA BATERÍA ESTÁ > SOC MÍNIMO: Permite mantener la velocidad de carga tirando de la batería si el sol cae.
-                      # SI LA BATERÍA ESTÁ <= SOC MÍNIMO: Ajusta la carga estrictamente al excedente solar puro exportado a la red.
                       total_available_w: >-
                         {% if soc_ok %}
                           {{ [ (pv_w + exported_surplus_w), effective_house_limit_w ] | min }}
@@ -562,7 +559,6 @@ action:
                         {% endif %}
 
                   - choose:
-                      # CONDICIÓN DE CÁLCULO DE POTENCIA SUFICIENTE (O EN PERÍODO DE TEMPORIZADOR DE PAUSA)
                       - conditions:
                           - condition: template
                             value_template: "{{ not has_priority_block }}"
@@ -600,9 +596,6 @@ action:
                                           c1_obj: "{{ states[c1_num_ent] }}"
                                           c1_sec_since_change: "{{ (now() - c1_obj.last_changed).total_seconds() if (c1_obj is defined and c1_obj.last_changed is defined) else 9999 }}"
                                           
-                                          # VERIFICACIÓN ESTRICTA DEL TEMPORIZADOR DE CAMBIO DE AMPERAJE (amp_delay_sec)
-                                          # No se permite ningún cambio de amperaje (bajada o subida) sin que transcurra el tiempo mínimo configurado,
-                                          # a menos que sea una emergencia directa por exceso de consumo total en la casa (ICP).
                                           is_overpower_emergency_c1: "{{ max_safe_amps < curr_c1_a }}"
                                           
                                           target_c1: >-
@@ -698,53 +691,47 @@ action:
                                     data:
                                       value: "{{ safe_wb_amps }}"
 
-                      # SI EL SOL O LA BATERÍA CAEN Y NO HAY ENERGÍA SUFICIENTE (< 6A):
-                      # SE APLICA EL TEMPORIZADOR DE PAUSA MÍNIMA (stop_delay_input).
-                      # NO SE DESCONECTA HASTA QUE HAYAN TRANSCURRIDO CONTINUAMENTE LOS MINUTOS CONFIGURADOS EN stop_delay_input.
-                      default:
-                        - variables:
-                            c1_sw_obj: "{{ states[c1_sw_ent] if c1_sw_ent != '' else none }}"
-                            wb_sw_obj: "{{ states[wb_sw_ent] if wb_sw_ent != '' else none }}"
-                            
-                            c1_charge_sec: "{{ (now() - c1_sw_obj.last_changed).total_seconds() if (c1_sw_obj is not none and c1_sw_obj.last_changed is not none and is_state(c1_sw_ent, 'on')) else 9999 }}"
-                            wb_charge_sec: "{{ (now() - wb_sw_obj.last_changed).total_seconds() if (wb_sw_obj is not none and wb_sw_obj.last_changed is not none and is_state(wb_sw_ent, 'on')) else 9999 }}"
-                            
-                            # ¿Ha transcurrido ya el tiempo mínimo de pausa continua en estado de baja potencia?
-                            can_stop_c1: "{{ c1_charge_sec >= stop_delay_sec }}"
-                            can_stop_wb: "{{ wb_charge_sec >= stop_delay_sec }}"
+                    default:
+                      - variables:
+                          c1_sw_obj: "{{ states[c1_sw_ent] if c1_sw_ent != '' else none }}"
+                          wb_sw_obj: "{{ states[wb_sw_ent] if wb_sw_ent != '' else none }}"
+                          
+                          c1_charge_sec: "{{ (now() - c1_sw_obj.last_changed).total_seconds() if (c1_sw_obj is not none and c1_sw_obj.last_changed is not none and is_state(c1_sw_ent, 'on')) else 9999 }}"
+                          wb_charge_sec: "{{ (now() - wb_sw_obj.last_changed).total_seconds() if (wb_sw_obj is not none and wb_sw_obj.last_changed is not none and is_state(wb_sw_ent, 'on')) else 9999 }}"
+                          
+                          can_stop_c1: "{{ c1_charge_sec >= stop_delay_sec }}"
+                          can_stop_wb: "{{ wb_charge_sec >= stop_delay_sec }}"
 
-                        - choose:
-                            # SI AÚN NO HA PASADO EL TIEMPO MÍNIMO DE PAUSA: MANTENER CARGA AL MÍNIMO SEGURO (6A) Y NO DESCONECTAR
-                            - conditions:
+                      - choose:
+                          - conditions:
+                              - condition: template
+                                value_template: "{{ not can_stop_c1 or not can_stop_wb }}"
+                            sequence:
+                              - if:
+                                  - condition: template
+                                    value_template: "{{ is_c1_connected and var_c1_num != {} }}"
+                                then:
+                                  - if:
+                                      - condition: template
+                                        value_template: "{{ (states(c1_num_ent) | float(0)) != 6 }}"
+                                    then:
+                                      - service: number.set_value
+                                        target: !input car_1_current_number
+                                        data: { value: 6 }
+
+                          default:
+                            - if:
                                 - condition: template
-                                  value_template: "{{ not can_stop_c1 or not can_stop_wb }}"
-                              sequence:
-                                - if:
-                                    - condition: template
-                                      value_template: "{{ is_c1_connected and var_c1_num != {} }}"
-                                  then:
-                                    - if:
-                                        - condition: template
-                                          value_template: "{{ (states(c1_num_ent) | float(0)) != 6 }}"
-                                      then:
-                                        - service: number.set_value
-                                          target: !input car_1_current_number
-                                          data: { value: 6 }
-
-                            # SI YA HA TRANSCURRIDO CONTINUAMENTE EL TIEMPO MÍNIMO DE PAUSA: APAGAR CARGA CON SEGURIDAD
-                            default:
-                              - if:
-                                  - condition: template
-                                    value_template: "{{ not is_state(wb_sw_ent, 'off') }}"
-                                then:
-                                  - service: switch.turn_off
-                                    target: !input wallbox_switch
-                              - if:
-                                  - condition: template
-                                    value_template: "{{ var_c1_sw != {} and not is_state(c1_sw_ent, 'off') }}"
-                                then:
-                                  - service: switch.turn_off
-                                    target: !input car_1_switch
+                                  value_template: "{{ not is_state(wb_sw_ent, 'off') }}"
+                              then:
+                                - service: switch.turn_off
+                                  target: !input wallbox_switch
+                            - if:
+                                - condition: template
+                                  value_template: "{{ var_c1_sw != {} and not is_state(c1_sw_ent, 'off') }}"
+                              then:
+                                - service: switch.turn_off
+                                  target: !input car_1_switch
 
               # -------------------------------------------------------------
               # MODO 4: APAGADO
