@@ -1,6 +1,6 @@
 blueprint:
   name: "EV Smart"
-  source_url: https://raw.githubusercontent.com/sdaf2/ha-blueprints/refs/heads/main/automations/EVSolar/ev_charging_blueprint.yaml
+  source_url: https://github.com/sdaf2/ha-blueprints/blob/main/automations/EVSolar/ev_charging_blueprint.yaml
   description: >
     Control de carga avanzado para VE. Incluye modo Automático (Solar de día / Nocturno de noche),
     Manual, Solar y Nocturno. Configuración del signo de inyección a red para Meter GoodWe,
