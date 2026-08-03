@@ -303,9 +303,9 @@ trigger:
 action:
   # 1. EVALUACIÓN INTELIGENTE DE CABLES Y ESTADO DE CARGA DE VEHÍCULOS
   - variables:
-      wb_val: "{{ (states(var_wb_cable) | lower) if var_wb_cable != {} else 'unavailable' }}"
-      c1_val: "{{ (states(var_c1_cable) | lower) if var_c1_cable != {} else 'unavailable' }}"
-      c2_val: "{{ (states(var_c2_cable) | lower) if var_c2_cable != {} else 'unavailable' }}"
+      wb_val: "{{ (states(var_wb_cable) | lower) if (var_wb_cable is string and var_wb_cable != '' and var_wb_cable != 'none') else 'unavailable' }}"
+      c1_val: "{{ (states(var_c1_cable) | lower) if (var_c1_cable is string and var_c1_cable != '' and var_c1_cable != 'none') else 'unavailable' }}"
+      c2_val: "{{ (states(var_c2_cable) | lower) if (var_c2_cable is string and var_c2_cable != '' and var_c2_cable != 'none') else 'unavailable' }}"
 
       c1_st_val: >-
         {% if var_c1_state is string and var_c1_state != '' and var_c1_state != 'none' %}
@@ -342,8 +342,8 @@ action:
       raw_modo_str: "{{ states(var_modo) }}"
       es_finde: "{{ now().weekday() in [5, 6] }}"
       t_now: "{{ now().strftime('%H:%M:%S') }}"
-      t_start: "{{ states(var_h_inicio) }}"
-      t_end: "{{ states(var_h_fin) }}"
+      t_start: "{{ states(var_h_inicio)[:8] if (states(var_h_inicio) | length) >= 8 else '00:00:00' }}"
+      t_end: "{{ states(var_h_fin)[:8] if (states(var_h_fin) | length) >= 8 else '08:00:00' }}"
       en_tramo_nocturno: "{{ (t_now >= t_start or t_now <= t_end) if (t_start > t_end) else (t_now >= t_start and t_now <= t_end) }}"
       es_horario_nocturno: "{{ es_finde or en_tramo_nocturno }}"
 
@@ -566,7 +566,7 @@ action:
                       min_charge_sec: "{{ (states(var_min_charge_m) | float(5)) * 60 }}"
                       stop_delay_sec: "{{ (states(var_stop_delay_m) | float(3)) * 60 if var_stop_delay_m != {} else 180 }}"
                       amp_delay_sec: "{{ states(var_amp_delay_s) | float(60) if var_amp_delay_s != {} else 60 }}"
-                      has_priority_block: "{{ var_prio_block != [] and is_state(var_prio_block, 'on') }}"
+                      has_priority_block: "{{ var_prio_block is string and var_prio_block != '' and var_prio_block != 'none' and is_state(var_prio_block, 'on') }}"
                       
                       current_soc: "{{ states(var_soc) | float(0) }}"
                       min_soc_req: "{{ states(var_min_soc) | float(80) }}"
@@ -737,11 +737,11 @@ action:
 
                     default:
                       - variables:
-                          c1_sw_obj: "{{ states[c1_sw_ent] if c1_sw_ent != '' else none }}"
-                          wb_sw_obj: "{{ states[wb_sw_ent] if wb_sw_ent != '' else none }}"
+                          c1_sw_obj: "{{ states[c1_sw_ent] if (c1_sw_ent is string and c1_sw_ent != '' and c1_sw_ent != 'none' and c1_sw_ent != '{}') else none }}"
+                          wb_sw_obj: "{{ states[wb_sw_ent] if (wb_sw_ent is string and wb_sw_ent != '' and wb_sw_ent != 'none' and wb_sw_ent != '{}') else none }}"
                           
-                          c1_charge_sec: "{{ (now() - c1_sw_obj.last_changed).total_seconds() if (c1_sw_obj is not none and c1_sw_obj.last_changed is not none and is_state(c1_sw_ent, 'on')) else 9999 }}"
-                          wb_charge_sec: "{{ (now() - wb_sw_obj.last_changed).total_seconds() if (wb_sw_obj is not none and wb_sw_obj.last_changed is not none and is_state(wb_sw_ent, 'on')) else 9999 }}"
+                          c1_charge_sec: "{{ (now() - c1_sw_obj.last_changed).total_seconds() if (c1_sw_obj is not none and c1_sw_obj.last_changed is defined and is_state(c1_sw_ent, 'on')) else 9999 }}"
+                          wb_charge_sec: "{{ (now() - wb_sw_obj.last_changed).total_seconds() if (wb_sw_obj is not none and wb_sw_obj.last_changed is defined and is_state(wb_sw_ent, 'on')) else 9999 }}"
                           
                           can_stop_c1: "{{ c1_charge_sec >= stop_delay_sec }}"
                           can_stop_wb: "{{ wb_charge_sec >= stop_delay_sec }}"
