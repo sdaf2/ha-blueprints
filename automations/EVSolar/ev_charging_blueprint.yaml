@@ -372,7 +372,7 @@ action:
           # --- GESTIÓN DE MODOS Y EJECUCIÓN ---
           - choose:
               # -------------------------------------------------------------
-              # MODO 1: MANUAL (Con protección de límite Red si Batería <= 10%)
+              # MODO 1: MANUAL (Arranque garantizado en Wallbox y Tesla)
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
@@ -393,57 +393,47 @@ action:
                           {{ [ req_manual_amps, max_grid_amps ] | min }}
                         {% endif %}
                       safe_c1_manual: "{{ [ [desired_amps, 6] | max, 32 ] | min }}"
-                  - choose:
-                      - conditions:
-                          - condition: template
-                            value_template: "{{ has_known_car_connected }}"
-                        sequence:
-                          - if:
-                              - condition: template
-                                value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
-                            then:
-                              - service: switch.turn_on
-                                target: !input wallbox_switch
-                                continue_on_error: true
-                          - if:
-                              - condition: template
-                                value_template: "{{ (states(wb_num_ent) | float(0)) != 32 }}"
-                            then:
-                              - service: number.set_value
-                                target: !input wallbox_current_number
-                                data: { value: 32 }
-                                continue_on_error: true
-                          - if:
-                              - condition: template
-                                value_template: "{{ is_c1_connected and var_c1_num != {} }}"
-                            then:
-                              - if:
-                                  - condition: template
-                                    value_template: "{{ not is_state(c1_sw_ent, 'on') }}"
-                                then:
-                                  - service: switch.turn_on
-                                    target: !input car_1_switch
-                                    continue_on_error: true
-                              - service: number.set_value
-                                target: !input car_1_current_number
-                                data: { value: "{{ safe_c1_manual }}" }
-                                continue_on_error: true
+                  
+                  # 1. Encender Wallbox si no está encendido
+                  - if:
+                      - condition: template
+                        value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
+                    then:
+                      - service: switch.turn_on
+                        target: !input wallbox_switch
+                        continue_on_error: true
 
-                    default:
-                      - if:
-                          - condition: template
-                            value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
-                        then:
-                          - service: switch.turn_on
-                            target: !input wallbox_switch
-                            continue_on_error: true
+                  # 2. Ajustar Wallbox a 32A
+                  - if:
+                      - condition: template
+                        value_template: "{{ (states(wb_num_ent) | float(0)) != 32 }}"
+                    then:
                       - service: number.set_value
                         target: !input wallbox_current_number
-                        data: { value: "{{ desired_amps }}" }
+                        data: { value: 32 }
+                        continue_on_error: true
+
+                  # 3. Enviar orden de arranque Incondicional a Tesla (con continue_on_error)
+                  - if:
+                      - condition: template
+                        value_template: "{{ var_c1_sw != {} }}"
+                    then:
+                      - service: switch.turn_on
+                        target: !input car_1_switch
+                        continue_on_error: true
+
+                  # 4. Establecer Amperios en Tesla
+                  - if:
+                      - condition: template
+                        value_template: "{{ var_c1_num != {} }}"
+                    then:
+                      - service: number.set_value
+                        target: !input car_1_current_number
+                        data: { value: "{{ safe_c1_manual }}" }
                         continue_on_error: true
 
               # -------------------------------------------------------------
-              # MODO 2: NOCTURNO / FINDE (Con protección de límite Red si Batería <= 10%)
+              # MODO 2: NOCTURNO / FINDE (Arranque garantizado en Wallbox y Tesla)
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
@@ -469,53 +459,43 @@ action:
                                   {{ [ req_noct_amps, max_grid_amps ] | min }}
                                 {% endif %}
                               safe_c1_noct: "{{ [ [desired_amps, 6] | max, 32 ] | min }}"
-                          - choose:
-                              - conditions:
-                                  - condition: template
-                                    value_template: "{{ has_known_car_connected }}"
-                                sequence:
-                                  - if:
-                                      - condition: template
-                                        value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
-                                    then:
-                                      - service: switch.turn_on
-                                        target: !input wallbox_switch
-                                        continue_on_error: true
-                                  - if:
-                                      - condition: template
-                                        value_template: "{{ (states(wb_num_ent) | float(0)) != 32 }}"
-                                    then:
-                                      - service: number.set_value
-                                        target: !input wallbox_current_number
-                                        data: { value: 32 }
-                                        continue_on_error: true
-                                  - if:
-                                      - condition: template
-                                        value_template: "{{ is_c1_connected and var_c1_num != {} }}"
-                                    then:
-                                      - if:
-                                          - condition: template
-                                            value_template: "{{ not is_state(c1_sw_ent, 'on') }}"
-                                        then:
-                                          - service: switch.turn_on
-                                            target: !input car_1_switch
-                                            continue_on_error: true
-                                      - service: number.set_value
-                                        target: !input car_1_current_number
-                                        data: { value: "{{ safe_c1_noct }}" }
-                                        continue_on_error: true
 
-                            default:
-                              - if:
-                                  - condition: template
-                                    value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
-                                then:
-                                  - service: switch.turn_on
-                                    target: !input wallbox_switch
-                                    continue_on_error: true
+                          # 1. Encender Wallbox si no está encendido
+                          - if:
+                              - condition: template
+                                value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
+                            then:
+                              - service: switch.turn_on
+                                target: !input wallbox_switch
+                                continue_on_error: true
+
+                          # 2. Ajustar Wallbox a 32A
+                          - if:
+                              - condition: template
+                                value_template: "{{ (states(wb_num_ent) | float(0)) != 32 }}"
+                            then:
                               - service: number.set_value
                                 target: !input wallbox_current_number
-                                data: { value: "{{ desired_amps }}" }
+                                data: { value: 32 }
+                                continue_on_error: true
+
+                          # 3. Enviar orden de arranque Incondicional a Tesla
+                          - if:
+                              - condition: template
+                                value_template: "{{ var_c1_sw != {} }}"
+                            then:
+                              - service: switch.turn_on
+                                target: !input car_1_switch
+                                continue_on_error: true
+
+                          # 4. Establecer Amperios en Tesla
+                          - if:
+                              - condition: template
+                                value_template: "{{ var_c1_num != {} }}"
+                            then:
+                              - service: number.set_value
+                                target: !input car_1_current_number
+                                data: { value: "{{ safe_c1_noct }}" }
                                 continue_on_error: true
 
                     default:
@@ -688,13 +668,9 @@ action:
                                             {% endif %}
 
                                           safe_c1_amps: "{{ [target_c1, 32] | min }}"
-                                      - if:
-                                          - condition: template
-                                            value_template: "{{ not is_state(c1_sw_ent, 'on') }}"
-                                        then:
-                                          - service: switch.turn_on
-                                            target: !input car_1_switch
-                                            continue_on_error: true
+                                      - service: switch.turn_on
+                                        target: !input car_1_switch
+                                        continue_on_error: true
                                       - service: number.set_value
                                         target: !input car_1_current_number
                                         data:
@@ -720,13 +696,9 @@ action:
                                             {% endif %}
 
                                           safe_c2_amps: "{{ [target_c2, 32] | min }}"
-                                      - if:
-                                          - condition: template
-                                            value_template: "{{ not is_state(c2_sw_ent, 'on') }}"
-                                        then:
-                                          - service: switch.turn_on
-                                            target: !input car_2_switch
-                                            continue_on_error: true
+                                      - service: switch.turn_on
+                                        target: !input car_2_switch
+                                        continue_on_error: true
                                       - service: number.set_value
                                         target: !input car_2_current_number
                                         data:
