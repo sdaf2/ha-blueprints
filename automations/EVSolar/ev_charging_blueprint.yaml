@@ -372,7 +372,7 @@ action:
           # --- GESTIÓN DE MODOS Y EJECUCIÓN ---
           - choose:
               # -------------------------------------------------------------
-              # MODO 1: MANUAL (Protegido contra errores out_of_range)
+              # MODO 1: MANUAL (Envío DIRECTO del valor seleccionado por usuario)
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
@@ -380,8 +380,7 @@ action:
                 sequence:
                   - variables:
                       desired_amps: "{{ (states(var_amp_manual) | float(16)) | int(16) }}"
-                      c1_max_attr: "{{ state_attr(c1_num_ent, 'max') | float(32) if (var_c1_num != {} and state_attr(c1_num_ent, 'max') is not none) else 32 }}"
-                      safe_c1_manual: "{{ [desired_amps, c1_max_attr] | min }}"
+                      safe_c1_manual: "{{ [ [desired_amps, 6] | max, 32 ] | min }}"
                   - choose:
                       - conditions:
                           - condition: template
@@ -432,7 +431,7 @@ action:
                         continue_on_error: true
 
               # -------------------------------------------------------------
-              # MODO 2: NOCTURNO / FINDE
+              # MODO 2: NOCTURNO / FINDE (Envío DIRECTO del valor nocturno)
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
@@ -445,8 +444,7 @@ action:
                         sequence:
                           - variables:
                               desired_amps: "{{ (states(var_amp_nocturna) | float(16)) | int(16) }}"
-                              c1_max_attr: "{{ state_attr(c1_num_ent, 'max') | float(32) if (var_c1_num != {} and state_attr(c1_num_ent, 'max') is not none) else 32 }}"
-                              safe_c1_noct: "{{ [desired_amps, c1_max_attr] | min }}"
+                              safe_c1_noct: "{{ [ [desired_amps, 6] | max, 32 ] | min }}"
                           - choose:
                               - conditions:
                                   - condition: template
@@ -665,8 +663,7 @@ action:
                                               {{ raw_target_c1 }}
                                             {% endif %}
 
-                                          c1_max_attr: "{{ state_attr(c1_num_ent, 'max') | float(32) if state_attr(c1_num_ent, 'max') is not none else 32 }}"
-                                          safe_c1_amps: "{{ [target_c1, c1_max_attr] | min }}"
+                                          safe_c1_amps: "{{ [target_c1, 32] | min }}"
                                       - if:
                                           - condition: template
                                             value_template: "{{ not is_state(c1_sw_ent, 'on') }}"
@@ -698,8 +695,7 @@ action:
                                               {{ raw_target_c2 }}
                                             {% endif %}
 
-                                          c2_max_attr: "{{ state_attr(c2_num_ent, 'max') | float(32) if state_attr(c2_num_ent, 'max') is not none else 32 }}"
-                                          safe_c2_amps: "{{ [target_c2, c2_max_attr] | min }}"
+                                          safe_c2_amps: "{{ [target_c2, 32] | min }}"
                                       - if:
                                           - condition: template
                                             value_template: "{{ not is_state(c2_sw_ent, 'on') }}"
@@ -736,8 +732,7 @@ action:
                                       {{ raw_target_wb }}
                                     {% endif %}
 
-                                  wb_max_attr: "{{ state_attr(wb_num_ent, 'max') | float(32) if state_attr(wb_num_ent, 'max') is not none else 32 }}"
-                                  safe_wb_amps: "{{ [target_wb, wb_max_attr] | min }}"
+                                  safe_wb_amps: "{{ [target_wb, 32] | min }}"
                               - service: number.set_value
                                 target: !input wallbox_current_number
                                 data:
