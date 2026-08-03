@@ -372,14 +372,26 @@ action:
           # --- GESTIÓN DE MODOS Y EJECUCIÓN ---
           - choose:
               # -------------------------------------------------------------
-              # MODO 1: MANUAL (Envío DIRECTO del valor seleccionado por usuario)
+              # MODO 1: MANUAL (Con protección de límite Red si Batería <= 10%)
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
                     value_template: "{{ effective_modo == 'Manual' }}"
                 sequence:
                   - variables:
-                      desired_amps: "{{ (states(var_amp_manual) | float(16)) | int(16) }}"
+                      req_manual_amps: "{{ (states(var_amp_manual) | float(16)) | int(16) }}"
+                      soc_val: "{{ states(var_soc) | float(0) }}"
+                      pv_w: "{{ states(var_pv_power) | float(0) }}"
+                      has_energy_support: "{{ pv_w > 100 or soc_val > 10 }}"
+                      limit_grid_only_w: "{{ states(var_max_grid_w) | float(3500) if var_max_grid_w != {} else 3500 }}"
+                      max_grid_amps: "{{ (limit_grid_only_w / 230) | int(15) }}"
+                      
+                      desired_amps: >-
+                        {% if has_energy_support %}
+                          {{ req_manual_amps }}
+                        {% else %}
+                          {{ [ req_manual_amps, max_grid_amps ] | min }}
+                        {% endif %}
                       safe_c1_manual: "{{ [ [desired_amps, 6] | max, 32 ] | min }}"
                   - choose:
                       - conditions:
@@ -431,7 +443,7 @@ action:
                         continue_on_error: true
 
               # -------------------------------------------------------------
-              # MODO 2: NOCTURNO / FINDE (Envío DIRECTO del valor nocturno)
+              # MODO 2: NOCTURNO / FINDE (Con protección de límite Red si Batería <= 10%)
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
@@ -443,7 +455,19 @@ action:
                             value_template: "{{ es_horario_nocturno }}"
                         sequence:
                           - variables:
-                              desired_amps: "{{ (states(var_amp_nocturna) | float(16)) | int(16) }}"
+                              req_noct_amps: "{{ (states(var_amp_nocturna) | float(16)) | int(16) }}"
+                              soc_val: "{{ states(var_soc) | float(0) }}"
+                              pv_w: "{{ states(var_pv_power) | float(0) }}"
+                              has_energy_support: "{{ pv_w > 100 or soc_val > 10 }}"
+                              limit_grid_only_w: "{{ states(var_max_grid_w) | float(3500) if var_max_grid_w != {} else 3500 }}"
+                              max_grid_amps: "{{ (limit_grid_only_w / 230) | int(15) }}"
+                              
+                              desired_amps: >-
+                                {% if has_energy_support %}
+                                  {{ req_noct_amps }}
+                                {% else %}
+                                  {{ [ req_noct_amps, max_grid_amps ] | min }}
+                                {% endif %}
                               safe_c1_noct: "{{ [ [desired_amps, 6] | max, 32 ] | min }}"
                           - choose:
                               - conditions:
