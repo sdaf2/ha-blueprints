@@ -372,7 +372,7 @@ action:
           # --- GESTIÓN DE MODOS Y EJECUCIÓN ---
           - choose:
               # -------------------------------------------------------------
-              # MODO 1: MANUAL (Protegido contra errores API de Tesla)
+              # MODO 1: MANUAL (Protegido contra errores out_of_range)
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
@@ -380,6 +380,8 @@ action:
                 sequence:
                   - variables:
                       desired_amps: "{{ (states(var_amp_manual) | float(16)) | int(16) }}"
+                      c1_max_attr: "{{ state_attr(c1_num_ent, 'max') | float(32) if (var_c1_num != {} and state_attr(c1_num_ent, 'max') is not none) else 32 }}"
+                      safe_c1_manual: "{{ [desired_amps, c1_max_attr] | min }}"
                   - choose:
                       - conditions:
                           - condition: template
@@ -399,6 +401,7 @@ action:
                               - service: number.set_value
                                 target: !input wallbox_current_number
                                 data: { value: 32 }
+                                continue_on_error: true
                           - if:
                               - condition: template
                                 value_template: "{{ is_c1_connected and var_c1_num != {} }}"
@@ -412,7 +415,8 @@ action:
                                     continue_on_error: true
                               - service: number.set_value
                                 target: !input car_1_current_number
-                                data: { value: "{{ desired_amps }}" }
+                                data: { value: "{{ safe_c1_manual }}" }
+                                continue_on_error: true
 
                     default:
                       - if:
@@ -425,6 +429,7 @@ action:
                       - service: number.set_value
                         target: !input wallbox_current_number
                         data: { value: "{{ desired_amps }}" }
+                        continue_on_error: true
 
               # -------------------------------------------------------------
               # MODO 2: NOCTURNO / FINDE
@@ -440,6 +445,8 @@ action:
                         sequence:
                           - variables:
                               desired_amps: "{{ (states(var_amp_nocturna) | float(16)) | int(16) }}"
+                              c1_max_attr: "{{ state_attr(c1_num_ent, 'max') | float(32) if (var_c1_num != {} and state_attr(c1_num_ent, 'max') is not none) else 32 }}"
+                              safe_c1_noct: "{{ [desired_amps, c1_max_attr] | min }}"
                           - choose:
                               - conditions:
                                   - condition: template
@@ -459,6 +466,7 @@ action:
                                       - service: number.set_value
                                         target: !input wallbox_current_number
                                         data: { value: 32 }
+                                        continue_on_error: true
                                   - if:
                                       - condition: template
                                         value_template: "{{ is_c1_connected and var_c1_num != {} }}"
@@ -472,7 +480,8 @@ action:
                                             continue_on_error: true
                                       - service: number.set_value
                                         target: !input car_1_current_number
-                                        data: { value: "{{ desired_amps }}" }
+                                        data: { value: "{{ safe_c1_noct }}" }
+                                        continue_on_error: true
 
                             default:
                               - if:
@@ -485,6 +494,7 @@ action:
                               - service: number.set_value
                                 target: !input wallbox_current_number
                                 data: { value: "{{ desired_amps }}" }
+                                continue_on_error: true
 
                     default:
                       - if:
@@ -634,6 +644,7 @@ action:
                                       - service: number.set_value
                                         target: !input wallbox_current_number
                                         data: { value: 32 }
+                                        continue_on_error: true
                                   - if:
                                       - condition: template
                                         value_template: "{{ is_c1_connected and is_c1_active and var_c1_num != {} and (amps_c1 | float(0)) >= 6 }}"
@@ -654,7 +665,8 @@ action:
                                               {{ raw_target_c1 }}
                                             {% endif %}
 
-                                          safe_c1_amps: "{{ [target_c1, 32] | min }}"
+                                          c1_max_attr: "{{ state_attr(c1_num_ent, 'max') | float(32) if state_attr(c1_num_ent, 'max') is not none else 32 }}"
+                                          safe_c1_amps: "{{ [target_c1, c1_max_attr] | min }}"
                                       - if:
                                           - condition: template
                                             value_template: "{{ not is_state(c1_sw_ent, 'on') }}"
@@ -666,6 +678,7 @@ action:
                                         target: !input car_1_current_number
                                         data:
                                           value: "{{ safe_c1_amps }}"
+                                        continue_on_error: true
                                   - if:
                                       - condition: template
                                         value_template: "{{ is_c2_connected and is_c2_active and var_c2_num != {} and (amps_c2 | float(0)) >= 6 }}"
@@ -685,7 +698,8 @@ action:
                                               {{ raw_target_c2 }}
                                             {% endif %}
 
-                                          safe_c2_amps: "{{ [target_c2, 32] | min }}"
+                                          c2_max_attr: "{{ state_attr(c2_num_ent, 'max') | float(32) if state_attr(c2_num_ent, 'max') is not none else 32 }}"
+                                          safe_c2_amps: "{{ [target_c2, c2_max_attr] | min }}"
                                       - if:
                                           - condition: template
                                             value_template: "{{ not is_state(c2_sw_ent, 'on') }}"
@@ -697,6 +711,7 @@ action:
                                         target: !input car_2_current_number
                                         data:
                                           value: "{{ safe_c2_amps }}"
+                                        continue_on_error: true
 
                             default:
                               - if:
@@ -721,11 +736,13 @@ action:
                                       {{ raw_target_wb }}
                                     {% endif %}
 
-                                  safe_wb_amps: "{{ [target_wb, 32] | min }}"
+                                  wb_max_attr: "{{ state_attr(wb_num_ent, 'max') | float(32) if state_attr(wb_num_ent, 'max') is not none else 32 }}"
+                                  safe_wb_amps: "{{ [target_wb, wb_max_attr] | min }}"
                               - service: number.set_value
                                 target: !input wallbox_current_number
                                 data:
                                   value: "{{ safe_wb_amps }}"
+                                continue_on_error: true
 
                     default:
                       - variables:
@@ -750,6 +767,7 @@ action:
                                   - service: number.set_value
                                     target: !input car_1_current_number
                                     data: { value: 6 }
+                                    continue_on_error: true
 
                         default:
                           - if:
