@@ -402,6 +402,9 @@ action:
                       - service: switch.turn_on
                         target: !input wallbox_switch
                         continue_on_error: true
+                      # Esperar a que el cargador energice el cable antes de ordenar al Tesla
+                      - delay:
+                          seconds: 5
 
                   # 2. Ajustar Wallbox a 32A
                   - if:
@@ -413,7 +416,7 @@ action:
                         data: { value: 32 }
                         continue_on_error: true
 
-                  # 3. Enviar orden de arranque Incondicional a Tesla (con continue_on_error)
+                  # 3. Enviar orden de arranque al Tesla (con continue_on_error para tolerar no_power/is_charging)
                   - if:
                       - condition: template
                         value_template: "{{ var_c1_sw != {} }}"
@@ -468,6 +471,9 @@ action:
                               - service: switch.turn_on
                                 target: !input wallbox_switch
                                 continue_on_error: true
+                              # Esperar a que el cargador energice el cable antes de ordenar al Tesla
+                              - delay:
+                                  seconds: 5
 
                           # 2. Ajustar Wallbox a 32A
                           - if:
@@ -479,7 +485,7 @@ action:
                                 data: { value: 32 }
                                 continue_on_error: true
 
-                          # 3. Enviar orden de arranque Incondicional a Tesla
+                          # 3. Enviar orden de arranque al Tesla
                           - if:
                               - condition: template
                                 value_template: "{{ var_c1_sw != {} }}"
