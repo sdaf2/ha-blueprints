@@ -372,7 +372,7 @@ action:
           # --- GESTIÓN DE MODOS Y EJECUCIÓN ---
           - choose:
               # -------------------------------------------------------------
-              # MODO 1: MANUAL (Carga DIRECTA al amperaje fijado por el usuario)
+              # MODO 1: MANUAL (Carga DIRECTA al amperaje fijado por el usuario sin recortes)
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
@@ -387,48 +387,28 @@ action:
                         sequence:
                           - service: switch.turn_on
                             target: !input wallbox_switch
-                          - if:
-                              - condition: template
-                                value_template: "{{ (states(wb_num_ent) | float(0)) != 32 }}"
-                            then:
-                              - service: number.set_value
-                                target: !input wallbox_current_number
-                                data: { value: 32 }
+                          - service: number.set_value
+                            target: !input wallbox_current_number
+                            data: { value: 32 }
                           - if:
                               - condition: template
                                 value_template: "{{ is_c1_connected and var_c1_num != {} }}"
                             then:
-                              - variables:
-                                  c1_min: "{{ state_attr(c1_num_ent, 'min') | float(0) if state_attr(c1_num_ent, 'min') is not none else 0 }}"
-                                  c1_max: "{{ state_attr(c1_num_ent, 'max') | float(32) if state_attr(c1_num_ent, 'max') is not none else 32 }}"
-                                  safe_c1_amps: "{{ [ [desired_amps, c1_min] | max, c1_max ] | min }}"
                               - service: switch.turn_on
                                 target: !input car_1_switch
-                              - if:
-                                  - condition: template
-                                    value_template: "{{ (states(c1_num_ent) | float(0)) != (safe_c1_amps | float(0)) }}"
-                                then:
-                                  - service: number.set_value
-                                    target: !input car_1_current_number
-                                    data: { value: "{{ safe_c1_amps }}" }
+                              - service: number.set_value
+                                target: !input car_1_current_number
+                                data: { value: "{{ desired_amps }}" }
 
                     default:
                       - service: switch.turn_on
                         target: !input wallbox_switch
-                      - variables:
-                          wb_min: "{{ state_attr(wb_num_ent, 'min') | float(6) if state_attr(wb_num_ent, 'min') is not none else 6 }}"
-                          wb_max: "{{ state_attr(wb_num_ent, 'max') | float(32) if state_attr(wb_num_ent, 'max') is not none else 32 }}"
-                          safe_wb_amps: "{{ [ [desired_amps, wb_min] | max, wb_max ] | min }}"
-                      - if:
-                          - condition: template
-                            value_template: "{{ (states(wb_num_ent) | float(0)) != (safe_wb_amps | float(0)) }}"
-                        then:
-                          - service: number.set_value
-                            target: !input wallbox_current_number
-                            data: { value: "{{ safe_wb_amps }}" }
+                      - service: number.set_value
+                        target: !input wallbox_current_number
+                        data: { value: "{{ desired_amps }}" }
 
               # -------------------------------------------------------------
-              # MODO 2: NOCTURNO / FINDE (Carga DIRECTA al amperaje nocturno fijado)
+              # MODO 2: NOCTURNO / FINDE (Carga DIRECTA al amperaje nocturno fijado sin recortes)
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
@@ -448,45 +428,25 @@ action:
                                 sequence:
                                   - service: switch.turn_on
                                     target: !input wallbox_switch
-                                  - if:
-                                      - condition: template
-                                        value_template: "{{ (states(wb_num_ent) | float(0)) != 32 }}"
-                                    then:
-                                      - service: number.set_value
-                                        target: !input wallbox_current_number
-                                        data: { value: 32 }
+                                  - service: number.set_value
+                                    target: !input wallbox_current_number
+                                    data: { value: 32 }
                                   - if:
                                       - condition: template
                                         value_template: "{{ is_c1_connected and var_c1_num != {} }}"
                                     then:
-                                      - variables:
-                                          c1_min: "{{ state_attr(c1_num_ent, 'min') | float(0) if state_attr(c1_num_ent, 'min') is not none else 0 }}"
-                                          c1_max: "{{ state_attr(c1_num_ent, 'max') | float(32) if state_attr(c1_num_ent, 'max') is not none else 32 }}"
-                                          safe_c1_amps: "{{ [ [desired_amps, c1_min] | max, c1_max ] | min }}"
                                       - service: switch.turn_on
                                         target: !input car_1_switch
-                                      - if:
-                                          - condition: template
-                                            value_template: "{{ (states(c1_num_ent) | float(0)) != (safe_c1_amps | float(0)) }}"
-                                        then:
-                                          - service: number.set_value
-                                            target: !input car_1_current_number
-                                            data: { value: "{{ safe_c1_amps }}" }
+                                      - service: number.set_value
+                                        target: !input car_1_current_number
+                                        data: { value: "{{ desired_amps }}" }
 
                             default:
                               - service: switch.turn_on
                                 target: !input wallbox_switch
-                              - variables:
-                                  wb_min: "{{ state_attr(wb_num_ent, 'min') | float(6) if state_attr(wb_num_ent, 'min') is not none else 6 }}"
-                                  wb_max: "{{ state_attr(wb_num_ent, 'max') | float(32) if state_attr(wb_num_ent, 'max') is not none else 32 }}"
-                                  safe_wb_amps: "{{ [ [desired_amps, wb_min] | max, wb_max ] | min }}"
-                              - if:
-                                  - condition: template
-                                    value_template: "{{ (states(wb_num_ent) | float(0)) != (safe_wb_amps | float(0)) }}"
-                                then:
-                                  - service: number.set_value
-                                    target: !input wallbox_current_number
-                                    data: { value: "{{ safe_wb_amps }}" }
+                              - service: number.set_value
+                                target: !input wallbox_current_number
+                                data: { value: "{{ desired_amps }}" }
 
                     default:
                       - if:
@@ -622,26 +582,16 @@ action:
                                   - condition: template
                                     value_template: "{{ has_known_car_connected }}"
                                 sequence:
-                                  - if:
-                                      - condition: template
-                                        value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
-                                    then:
-                                      - service: switch.turn_on
-                                        target: !input wallbox_switch
-                                  - if:
-                                      - condition: template
-                                        value_template: "{{ (states(wb_num_ent) | float(0)) != 32 }}"
-                                    then:
-                                      - service: number.set_value
-                                        target: !input wallbox_current_number
-                                        data: { value: 32 }
+                                  - service: switch.turn_on
+                                    target: !input wallbox_switch
+                                  - service: number.set_value
+                                    target: !input wallbox_current_number
+                                    data: { value: 32 }
                                   - if:
                                       - condition: template
                                         value_template: "{{ is_c1_connected and is_c1_active and var_c1_num != {} and (amps_c1 | float(0)) >= 6 }}"
                                     then:
                                       - variables:
-                                          c1_min: "{{ state_attr(c1_num_ent, 'min') | float(0) if state_attr(c1_num_ent, 'min') is not none else 0 }}"
-                                          c1_max: "{{ state_attr(c1_num_ent, 'max') | float(32) if state_attr(c1_num_ent, 'max') is not none else 32 }}"
                                           raw_target_c1: "{{ [amps_c1 | float(6), 6] | max }}"
                                           curr_c1_a: "{{ states(c1_num_ent) | float(0) }}"
                                           
@@ -657,28 +607,18 @@ action:
                                               {{ raw_target_c1 }}
                                             {% endif %}
 
-                                          safe_c1_amps: "{{ [ [target_c1, c1_min] | max, c1_max ] | min }}"
-                                      - if:
-                                          - condition: template
-                                            value_template: "{{ not is_state(c1_sw_ent, 'on') }}"
-                                        then:
-                                          - service: switch.turn_on
-                                            target: !input car_1_switch
-                                      - if:
-                                          - condition: template
-                                            value_template: "{{ (states(c1_num_ent) | float(0)) != (safe_c1_amps | float(0)) }}"
-                                        then:
-                                          - service: number.set_value
-                                            target: !input car_1_current_number
-                                            data:
-                                              value: "{{ safe_c1_amps }}"
+                                          safe_c1_amps: "{{ [target_c1, 32] | min }}"
+                                      - service: switch.turn_on
+                                        target: !input car_1_switch
+                                      - service: number.set_value
+                                        target: !input car_1_current_number
+                                        data:
+                                          value: "{{ safe_c1_amps }}"
                                   - if:
                                       - condition: template
                                         value_template: "{{ is_c2_connected and is_c2_active and var_c2_num != {} and (amps_c2 | float(0)) >= 6 }}"
                                     then:
                                       - variables:
-                                          c2_min: "{{ state_attr(c2_num_ent, 'min') | float(0) if state_attr(c2_num_ent, 'min') is not none else 0 }}"
-                                          c2_max: "{{ state_attr(c2_num_ent, 'max') | float(32) if state_attr(c2_num_ent, 'max') is not none else 32 }}"
                                           raw_target_c2: "{{ [amps_c2 | float(6), 6] | max }}"
                                           curr_c2_a: "{{ states(c2_num_ent) | float(0) }}"
                                           c2_obj: "{{ states[c2_num_ent] }}"
@@ -693,32 +633,18 @@ action:
                                               {{ raw_target_c2 }}
                                             {% endif %}
 
-                                          safe_c2_amps: "{{ [ [target_c2, c2_min] | max, c2_max ] | min }}"
-                                      - if:
-                                          - condition: template
-                                            value_template: "{{ not is_state(c2_sw_ent, 'on') }}"
-                                        then:
-                                          - service: switch.turn_on
-                                            target: !input car_2_switch
-                                      - if:
-                                          - condition: template
-                                            value_template: "{{ (states(c2_num_ent) | float(0)) != (safe_c2_amps | float(0)) }}"
-                                        then:
-                                          - service: number.set_value
-                                            target: !input car_2_current_number
-                                            data:
-                                              value: "{{ safe_c2_amps }}"
+                                          safe_c2_amps: "{{ [target_c2, 32] | min }}"
+                                      - service: switch.turn_on
+                                        target: !input car_2_switch
+                                      - service: number.set_value
+                                        target: !input car_2_current_number
+                                        data:
+                                          value: "{{ safe_c2_amps }}"
 
                             default:
-                              - if:
-                                  - condition: template
-                                    value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
-                                then:
-                                  - service: switch.turn_on
-                                    target: !input wallbox_switch
+                              - service: switch.turn_on
+                                target: !input wallbox_switch
                               - variables:
-                                  wb_min: "{{ state_attr(wb_num_ent, 'min') | float(6) if state_attr(wb_num_ent, 'min') is not none else 6 }}"
-                                  wb_max: "{{ state_attr(wb_num_ent, 'max') | float(32) if state_attr(wb_num_ent, 'max') is not none else 32 }}"
                                   raw_target_wb: "{{ [calculated_amps, 6] | max }}"
                                   curr_wb_a: "{{ states(wb_num_ent) | float(0) }}"
                                   wb_obj: "{{ states[wb_num_ent] }}"
@@ -733,15 +659,11 @@ action:
                                       {{ raw_target_wb }}
                                     {% endif %}
 
-                                  safe_wb_amps: "{{ [ [target_wb, wb_min] | max, wb_max ] | min }}"
-                              - if:
-                                  - condition: template
-                                    value_template: "{{ (states(wb_num_ent) | float(0)) != (safe_wb_amps | float(0)) }}"
-                                then:
-                                  - service: number.set_value
-                                    target: !input wallbox_current_number
-                                    data:
-                                      value: "{{ safe_wb_amps }}"
+                                  safe_wb_amps: "{{ [target_wb, 32] | min }}"
+                              - service: number.set_value
+                                target: !input wallbox_current_number
+                                data:
+                                  value: "{{ safe_wb_amps }}"
 
                     default:
                       - variables:
@@ -763,13 +685,9 @@ action:
                                   - condition: template
                                     value_template: "{{ is_c1_connected and is_c1_active and var_c1_num != {} }}"
                                 then:
-                                  - if:
-                                      - condition: template
-                                        value_template: "{{ (states(c1_num_ent) | float(0)) != 6 }}"
-                                    then:
-                                      - service: number.set_value
-                                        target: !input car_1_current_number
-                                        data: { value: 6 }
+                                  - service: number.set_value
+                                    target: !input car_1_current_number
+                                    data: { value: 6 }
 
                         default:
                           - if:
