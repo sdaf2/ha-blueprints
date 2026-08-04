@@ -372,7 +372,7 @@ action:
           # --- GESTIÓN DE MODOS Y EJECUCIÓN ---
           - choose:
               # -------------------------------------------------------------
-              # MODO 1: MANUAL (Arranque garantizado en Wallbox y Tesla)
+              # MODO 1: MANUAL - Arranca TODO incondicionalmente
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
@@ -383,9 +383,8 @@ action:
                       soc_val: "{{ states(var_soc) | float(0) }}"
                       pv_w: "{{ states(var_pv_power) | float(0) }}"
                       has_energy_support: "{{ pv_w > 100 or soc_val > 10 }}"
-                      limit_grid_only_w: "{{ states(var_max_grid_w) | float(3500) if var_max_grid_w != {} else 3500 }}"
+                      limit_grid_only_w: "{{ states(var_max_grid_w) | float(3500) if (var_max_grid_w is string and var_max_grid_w != '' and var_max_grid_w != 'none') else 3500 }}"
                       max_grid_amps: "{{ (limit_grid_only_w / 230) | int(15) }}"
-                      
                       desired_amps: >-
                         {% if has_energy_support %}
                           {{ req_manual_amps }}
@@ -393,50 +392,40 @@ action:
                           {{ [ req_manual_amps, max_grid_amps ] | min }}
                         {% endif %}
                       safe_c1_manual: "{{ [ [desired_amps, 6] | max, 32 ] | min }}"
-                  
-                  # 1. Encender Wallbox si no está encendido
+
+                  # PASO 1: Wallbox Availability ON
+                  - service: switch.turn_on
+                    target: !input wallbox_switch
+                    continue_on_error: true
+
+                  # PASO 2: Wallbox Charge Control ON
                   - if:
                       - condition: template
-                        value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
+                        value_template: "{{ wb_cc_ent != '' }}"
                     then:
                       - service: switch.turn_on
-                        target: !input wallbox_switch
-                        continue_on_error: true
-                      # Esperar a que el cargador energice el cable antes de ordenar al Tesla
-                      - delay:
-                          seconds: 5
-
-                  # 2. Ajustar Wallbox a 32A
-                  - if:
-                      - condition: template
-                        value_template: "{{ (states(wb_num_ent) | float(0)) != 32 }}"
-                    then:
-                      - service: number.set_value
-                        target: !input wallbox_current_number
-                        data: { value: 32 }
+                        target: !input wallbox_charge_control_switch
                         continue_on_error: true
 
-                  # 3. Enviar orden de arranque al Tesla (con continue_on_error para tolerar no_power/is_charging)
-                  - if:
-                      - condition: template
-                        value_template: "{{ var_c1_sw != {} }}"
-                    then:
-                      - service: switch.turn_on
-                        target: !input car_1_switch
-                        continue_on_error: true
+                  # PASO 3: Wallbox amperios max
+                  - service: number.set_value
+                    target: !input wallbox_current_number
+                    data: { value: 32 }
+                    continue_on_error: true
 
-                  # 4. Establecer Amperios en Tesla
-                  - if:
-                      - condition: template
-                        value_template: "{{ var_c1_num != {} }}"
-                    then:
-                      - service: number.set_value
-                        target: !input car_1_current_number
-                        data: { value: "{{ safe_c1_manual }}" }
-                        continue_on_error: true
+                  # PASO 4: Tesla ON
+                  - service: switch.turn_on
+                    target: !input car_1_switch
+                    continue_on_error: true
+
+                  # PASO 5: Tesla amperios
+                  - service: number.set_value
+                    target: !input car_1_current_number
+                    data: { value: "{{ safe_c1_manual }}" }
+                    continue_on_error: true
 
               # -------------------------------------------------------------
-              # MODO 2: NOCTURNO / FINDE (Arranque garantizado en Wallbox y Tesla)
+              # MODO 2: NOCTURNO / FINDE - Arranca TODO incondicionalmente
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
@@ -452,7 +441,7 @@ action:
                               soc_val: "{{ states(var_soc) | float(0) }}"
                               pv_w: "{{ states(var_pv_power) | float(0) }}"
                               has_energy_support: "{{ pv_w > 100 or soc_val > 10 }}"
-                              limit_grid_only_w: "{{ states(var_max_grid_w) | float(3500) if var_max_grid_w != {} else 3500 }}"
+                              limit_grid_only_w: "{{ states(var_max_grid_w) | float(3500) if (var_max_grid_w is string and var_max_grid_w != '' and var_max_grid_w != 'none') else 3500 }}"
                               max_grid_amps: "{{ (limit_grid_only_w / 230) | int(15) }}"
                               
                               desired_amps: >-
@@ -463,60 +452,48 @@ action:
                                 {% endif %}
                               safe_c1_noct: "{{ [ [desired_amps, 6] | max, 32 ] | min }}"
 
-                          # 1. Encender Wallbox si no está encendido
+                          # PASO 1: Wallbox Availability ON
+                          - service: switch.turn_on
+                            target: !input wallbox_switch
+                            continue_on_error: true
+
+                          # PASO 2: Wallbox Charge Control ON
                           - if:
                               - condition: template
-                                value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
+                                value_template: "{{ wb_cc_ent != '' }}"
                             then:
                               - service: switch.turn_on
-                                target: !input wallbox_switch
-                                continue_on_error: true
-                              # Esperar a que el cargador energice el cable antes de ordenar al Tesla
-                              - delay:
-                                  seconds: 5
-
-                          # 2. Ajustar Wallbox a 32A
-                          - if:
-                              - condition: template
-                                value_template: "{{ (states(wb_num_ent) | float(0)) != 32 }}"
-                            then:
-                              - service: number.set_value
-                                target: !input wallbox_current_number
-                                data: { value: 32 }
+                                target: !input wallbox_charge_control_switch
                                 continue_on_error: true
 
-                          # 3. Enviar orden de arranque al Tesla
-                          - if:
-                              - condition: template
-                                value_template: "{{ var_c1_sw != {} }}"
-                            then:
-                              - service: switch.turn_on
-                                target: !input car_1_switch
-                                continue_on_error: true
+                          # PASO 3: Wallbox amperios max
+                          - service: number.set_value
+                            target: !input wallbox_current_number
+                            data: { value: 32 }
+                            continue_on_error: true
 
-                          # 4. Establecer Amperios en Tesla
-                          - if:
-                              - condition: template
-                                value_template: "{{ var_c1_num != {} }}"
-                            then:
-                              - service: number.set_value
-                                target: !input car_1_current_number
-                                data: { value: "{{ safe_c1_noct }}" }
-                                continue_on_error: true
+                          # PASO 4: Tesla ON
+                          - service: switch.turn_on
+                            target: !input car_1_switch
+                            continue_on_error: true
+
+                          # PASO 5: Tesla amperios
+                          - service: number.set_value
+                            target: !input car_1_current_number
+                            data: { value: "{{ safe_c1_noct }}" }
+                            continue_on_error: true
 
                     default:
+                      - service: switch.turn_off
+                        target: !input car_1_switch
+                        continue_on_error: true
                       - if:
                           - condition: template
-                            value_template: "{{ not is_state(wb_sw_ent, 'off') }}"
+                            value_template: "{{ wb_cc_ent != '' }}"
                         then:
                           - service: switch.turn_off
-                            target: !input wallbox_switch
-                      - if:
-                          - condition: template
-                            value_template: "{{ var_c1_sw != {} and not is_state(c1_sw_ent, 'off') }}"
-                        then:
-                          - service: switch.turn_off
-                            target: !input car_1_switch
+                            target: !input wallbox_charge_control_switch
+                            continue_on_error: true
 
               # -------------------------------------------------------------
               # MODO 3: SOLAR (EXCEDENTES + APOYO BATERÍA + PROTECCIÓN DINÁMICA)
