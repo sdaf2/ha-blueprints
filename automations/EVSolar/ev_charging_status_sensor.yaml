@@ -1,0 +1,33 @@
+# =============================================================================
+# EV CHARGING DIAGNOSTIC TEMPLATE SENSOR
+# =============================================================================
+# Añade este bloque en tu configuration.yaml bajo `template:`
+# =============================================================================
+
+template:
+  - sensor:
+      - name: "EV Estado Carga Diagnóstico"
+        unique_id: ev_charging_status_summary
+        icon: mdi:ev-station
+        state: >-
+          {% set modo = states('input_select.ev_modo_carga') %}
+          {% set tesla_sw = states('switch.garaje_nafnaf_carga') %}
+          {% set tesla_amps = states('number.garaje_nafnaf_corriente_de_carga') | float(0) %}
+          {% set pv = states('sensor.goodwe_pv_power') | float(0) %}
+          {% set pv_k = (pv / 1000) if pv > 50 else pv %}
+          {% set bat_soc = states('sensor.goodwe_battery_state_of_charge') | float(0) %}
+          {% set ev_kw = (tesla_amps * 230 / 1000) | round(1) %}
+          
+          {% if tesla_sw == 'on' and tesla_amps >= 6 %}
+            ⚡ Cargando en {{ modo }} a {{ tesla_amps | int }}A ({{ ev_kw }} kW) | ☀️ Sol: {{ pv_k | round(1) }} kW | 🔋 Batería: {{ bat_soc | int }}%
+          {% elif modo == 'Apagado' %}
+            ⏹️ Carga Detenida (Modo Apagado) | 🔋 Batería: {{ bat_soc | int }}%
+          {% else %}
+            ⏳ En Espera ({{ modo }}) | ☀️ Sol: {{ pv_k | round(1) }} kW | 🔋 Batería: {{ bat_soc | int }}%
+          {% endif %}
+        attributes:
+          amperios_actuales: "{{ states('number.garaje_nafnaf_corriente_de_carga') | float(0) | int }}"
+          potencia_kw: "{{ ((states('number.garaje_nafnaf_corriente_de_carga') | float(0)) * 230 / 1000) | round(2) }}"
+          modo_actual: "{{ states('input_select.ev_modo_carga') }}"
+          produccion_solar_kw: "{{ (states('sensor.goodwe_pv_power') | float(0) / 1000) | round(2) if (states('sensor.goodwe_pv_power') | float(0)) > 50 else (states('sensor.goodwe_pv_power') | float(0)) }}"
+          soc_bateria: "{{ states('sensor.goodwe_battery_state_of_charge') | float(0) | int }}"
