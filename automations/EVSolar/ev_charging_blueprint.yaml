@@ -275,6 +275,7 @@ variables:
   var_h_inicio: !input hora_inicio_nocturna_input
   var_h_fin: !input hora_fin_nocturna_input
   var_wb_sw: !input wallbox_switch
+  var_wb_cc: !input wallbox_charge_control_switch
   var_wb_num: !input wallbox_current_number
   var_c1_sw: !input car_1_switch
   var_c1_num: !input car_1_current_number
@@ -329,24 +330,31 @@ action:
           charging
         {% endif %}
 
-      is_wb_connected: >-
-        {{ wb_val in ['on', 'true', 'conectado', 'connected', 'preparing', 'charging', 'suspendedev', 'suspendedevse', 'occupied', 'finishing', '1'] }}
       is_c1_connected: >-
-        {{ c1_val in ['on', 'true', 'conectado', 'connected', 'charging', 'pluggedin', '1'] }}
+        {{ (c1_val in ['on', 'true', 'conectado', 'connected', 'charging', 'cargando', 'pluggedin', 'plugged_in', 'online', '1', 'off', 'false']) and (c1_val not in ['unavailable', 'unknown', 'disconnected', 'desconectado', 'unplugged', 'none']) }}
       is_c2_connected: >-
-        {{ c2_val in ['on', 'true', 'conectado', 'connected', 'charging', 'pluggedin', '1'] }}
+        {{ (c2_val in ['on', 'true', 'conectado', 'connected', 'charging', 'cargando', 'pluggedin', 'plugged_in', 'online', '1', 'off', 'false']) and (c2_val not in ['unavailable', 'unknown', 'disconnected', 'desconectado', 'unplugged', 'none']) }}
 
-      # ¿Está el vehículo activamente necesitado de carga? (False si ya completó al 100% o estado Complete/Stopped)
+      # Si no hay sensor de cable de Wallbox asignado (var_wb_cable: {}), el Wallbox se considera conectado si hay Wallbox configurado o si el coche está conectado
+      is_wb_connected: >-
+        {% if var_wb_cable is string and var_wb_cable != '' and var_wb_cable != 'none' and var_wb_cable != {} %}
+          {{ wb_val in ['on', 'true', 'conectado', 'connected', 'preparing', 'charging', 'suspendedev', 'suspendedevse', 'occupied', 'finishing', '1', 'plugged_in', 'cargando'] }}
+        {% else %}
+          true
+        {% endif %}
+
+      # ¿Está el vehículo activamente necesitado de carga? (False solo si ya completó la carga al 100%)
       is_c1_active: >-
-        {{ is_c1_connected and (c1_st_val not in ['complete', 'completed', 'completo', 'full', 'stopped', 'off', 'false', '0']) }}
+        {{ is_c1_connected and (c1_st_val not in ['complete', 'completed', 'completo', 'full', '100%', '100']) }}
       is_c2_active: >-
-        {{ is_c2_connected and (c2_st_val not in ['complete', 'completed', 'completo', 'full', 'stopped', 'off', 'false', '0']) }}
+        {{ is_c2_connected and (c2_st_val not in ['complete', 'completed', 'completo', 'full', '100%', '100']) }}
 
       any_cable_connected: "{{ is_wb_connected or is_c1_connected or is_c2_connected }}"
       has_known_car_connected: "{{ is_c1_connected or is_c2_connected }}"
       
-      # Número de coches ACTIVOS cargando (excluye coches que ya llegaron al 100%)
-      num_active_cars: "{{ (1 if is_c1_active else 0) + (1 if is_c2_active else 0) }}"
+      # Número de coches ACTIVOS cargando (si está conectado por Wallbox sin coche individual, cuenta como 1)
+      active_cars_count: "{{ (1 if is_c1_active else 0) + (1 if is_c2_active else 0) }}"
+      num_active_cars: "{{ active_cars_count if active_cars_count > 0 else (1 if is_wb_connected else 0) }}"
 
       raw_modo_str: "{{ states(var_modo) }}"
       es_finde: "{{ now().weekday() in [5, 6] }}"
@@ -370,7 +378,129 @@ action:
       c2_num_ent: "{{ var_c2_num.entity_id[0] if var_c2_num.entity_id is defined and var_c2_num.entity_id is list else (var_c2_num.entity_id if var_c2_num.entity_id is defined else var_c2_num) }}"
 
       wb_sw_ent: "{{ var_wb_sw.entity_id[0] if var_wb_sw.entity_id is defined and var_wb_sw.entity_id is list else (var_wb_sw.entity_id if var_wb_sw.entity_id is defined else var_wb_sw) }}"
+      wb_cc_ent: "{{ var_wb_cc.entity_id[0] if var_wb_cc.entity_id is defined and var_wb_cc.entity_id is list else (var_wb_cc.entity_id if var_wb_cc.entity_id is defined else var_wb_cc) }}"
       wb_num_ent: "{{ var_wb_num.entity_id[0] if var_wb_num.entity_id is defined and var_wb_num.entity_id is list else (var_wb_num.entity_id if var_wb_num.entity_id is defined else var_wb_num) }}"
+
+      # --- VARIABLES DE CÁLCULO Y DEPURACIÓN EN TRAZA (SOLAR / BATERÍA / RED) ---
+      raw_pv: "{{ states(var_pv_power) | float(0) }}"
+      pv_w: "{{ (raw_pv * 1000) if (raw_pv > 0 and raw_pv <= 50) else raw_pv }}"
+      
+      current_soc: "{{ states(var_soc) | float(0) }}"
+      min_soc_req: "{{ states(var_min_soc) | float(80) }}"
+      target_hysteresis_soc: "{{ [ (min_soc_req + 10.0), 100.0 ] | min }}"
+      is_currently_charging: "{{ is_state(wb_sw_ent, 'on') or (var_c1_sw != {} and is_state(c1_sw_ent, 'on')) or (var_c2_sw != {} and is_state(c2_sw_ent, 'on')) }}"
+      
+      soc_ok: >-
+        {% if is_currently_charging %}
+          {{ current_soc >= min_soc_req }}
+        {% else %}
+          {{ current_soc >= target_hysteresis_soc }}
+        {% endif %}
+
+      has_energy_support: "{{ pv_w > 100 or current_soc > 10 }}"
+      
+      raw_limit_comb: "{{ states(var_max_house_w) | float(10000) if (var_max_house_w is string and var_max_house_w != '' and var_max_house_w != 'none') else 10000 }}"
+      limit_combined_w: "{{ (raw_limit_comb * 1000) if (raw_limit_comb > 0 and raw_limit_comb <= 100) else raw_limit_comb }}"
+      
+      raw_limit_grid: "{{ states(var_max_grid_w) | float(3500) if (var_max_grid_w is string and var_max_grid_w != '' and var_max_grid_w != 'none') else 3500 }}"
+      limit_grid_only_w: "{{ (raw_limit_grid * 1000) if (raw_limit_grid > 0 and raw_limit_grid <= 100) else raw_limit_grid }}"
+      
+      effective_house_limit_w: "{{ limit_combined_w if has_energy_support else limit_grid_only_w }}"
+
+      raw_grid_val: "{{ states(var_net_power) | float(0) }}"
+      raw_grid_w: "{{ (raw_grid_val * 1000) if (raw_grid_val > -50 and raw_grid_val < 50 and raw_grid_val != 0) else raw_grid_val }}"
+      net_power_w: "{{ (raw_grid_w * -1) if var_sign_setting == 'Positiva (+)' else raw_grid_w }}"
+      grid_import_w: "{{ net_power_w if net_power_w > 0 else 0 }}"
+      exported_surplus_w: "{{ (net_power_w * -1) if net_power_w < 0 else 0 }}"
+
+      c1_a_now: "{{ states(c1_num_ent) | float(0) if (var_c1_num is string and var_c1_num != '' and is_state(c1_sw_ent, 'on')) else 0 }}"
+      c2_a_now: "{{ states(c2_num_ent) | float(0) if (var_c2_num is string and var_c2_num != '' and is_state(c2_sw_ent, 'on')) else 0 }}"
+      wb_a_now: "{{ states(wb_num_ent) | float(0) if is_state(wb_sw_ent, 'on') else 0 }}"
+      ev_current_w: "{{ ( (c1_a_now + c2_a_now) if (c1_a_now > 0 or c2_a_now > 0) else wb_a_now ) * 230 }}"
+
+      raw_bat: "{{ states(var_bat_power) | float(0) if (var_bat_power is string and var_bat_power != '' and var_bat_power != 'none') else 0 }}"
+      bat_w: "{{ (raw_bat * 1000) if (raw_bat > -50 and raw_bat < 50 and raw_bat != 0) else raw_bat }}"
+      bat_discharging_w: "{{ bat_w if bat_w > 0 else 0 }}"
+      calc_total_house_w: "{{ pv_w + bat_discharging_w + grid_import_w }}"
+
+      raw_house: >-
+        {% if var_house_power is string and var_house_power != '' and var_house_power != 'none' %}
+          {{ states(var_house_power) | float(calc_total_house_w) }}
+        {% else %}
+          {{ calc_total_house_w }}
+        {% endif %}
+      house_total_w: "{{ (raw_house * 1000) if (raw_house > 0 and raw_house <= 50) else raw_house }}"
+
+      other_house_loads_w: "{{ [ (house_total_w - ev_current_w), 0 ] | max }}"
+      available_house_margin_w: "{{ [ (effective_house_limit_w - other_house_loads_w), 0 ] | max }}"
+      available_grid_margin_w: "{{ [ (limit_grid_only_w - grid_import_w + ev_current_w), 0 ] | max }}"
+
+      max_safe_amps_house: "{{ (available_house_margin_w / 230) | int(0) }}"
+      max_safe_amps_grid: "{{ (available_grid_margin_w / 230) | int(0) }}"
+      max_safe_amps: "{{ max_safe_amps_house if has_energy_support else [ max_safe_amps_house, max_safe_amps_grid ] | min }}"
+
+      has_priority_block: "{{ var_prio_block is string and var_prio_block != '' and var_prio_block != 'none' and is_state(var_prio_block, 'on') }}"
+
+      total_available_w: >-
+        {% set raw_pv = states(var_pv_power) | float(0) %}
+        {% set pv_w = (raw_pv * 1000) if (raw_pv > 0 and raw_pv <= 50) else raw_pv %}
+        
+        {# Lectura de batería e histéresis #}
+        {% set raw_soc = states(var_soc) | float(0) %}
+        {% set min_soc = states(var_min_soc) | float(50) %}
+        {% set hyst_soc = [ (min_soc + 10.0), 100.0 ] | min %}
+        
+        {# Estado del cargador y amperios actuales #}
+        {% set wb_on = is_state(wb_sw_ent, 'on') %}
+        {% set c1_on = var_c1_sw != {} and is_state(c1_sw_ent, 'on') %}
+        {% set c2_on = var_c2_sw != {} and is_state(c2_sw_ent, 'on') %}
+        {% set is_chg = wb_on or c1_on or c2_on %}
+        
+        {% set c1_a = states(c1_num_ent) | float(0) if (var_c1_num is string and var_c1_num != '' and c1_on) else 0 %}
+        {% set c2_a = states(c2_num_ent) | float(0) if (var_c2_num is string and var_c2_num != '' and c2_on) else 0 %}
+        {% set wb_a = states(wb_num_ent) | float(0) if wb_on else 0 %}
+        {% set ev_current = ((c1_a + c2_a) if (c1_a > 0 or c2_a > 0) else wb_a) * 230 %}
+        
+        {# Consumo real de la casa (SIN EL COCHE) #}
+        {% set raw_house = states(var_house_power) | float(0) %}
+        {% set house_total = (raw_house * 1000) if (raw_house > 0 and raw_house <= 50) else raw_house %}
+        {% set house_loads = [ (house_total - ev_current), 0 ] | max %}
+        
+        {# Excedente solar neto real #}
+        {% set net_solar = [ (pv_w - house_loads), 0 ] | max %}
+        
+        {# CONTROL DE RED (Tolerancia 500W y límite 3.5kW) #}
+        {% set raw_grid_val = states(var_net_power) | float(0) %}
+        {% set raw_grid_w = (raw_grid_val * 1000) if (raw_grid_val > -50 and raw_grid_val < 50 and raw_grid_val != 0) else raw_grid_val %}
+        {% set net_power_w = (raw_grid_w * -1) if var_sign_setting == 'Positiva (+)' else raw_grid_w %}
+        {% set grid_import = net_power_w if net_power_w > 0 else 0 %}
+        {% set grid_penalty = [ (grid_import - 500), 0 ] | max %}
+        
+        {# Límite máximo de la casa combinado (10kW) #}
+        {% set raw_house_lim = states(var_max_house_w) | float(10000) if (var_max_house_w is string and var_max_house_w != '' and var_max_house_w != 'none') else 10000 %}
+        {% set limit_comb = (raw_house_lim * 1000) if (raw_house_lim > 0 and raw_house_lim <= 100) else raw_house_lim %}
+        {% set headroom = [ (limit_comb - house_loads), 0 ] | max %}
+        
+        {# ¿Tiene la batería carga suficiente? #}
+        {% set soc_ok = (raw_soc >= min_soc) if is_chg else (raw_soc >= hyst_soc) %}
+        
+        {% if soc_ok %}
+          {% if is_chg and raw_soc < hyst_soc %}
+            {# ZONA DE AMORTIGUACIÓN: Solo usamos el sol neto, castigado por la red si hay picos > 500W #}
+            {{ [ [ (net_solar - grid_penalty), headroom ] | min, 0 ] | max }}
+          {% else %}
+            {# BATERÍA SANA: El sol más el apoyo de batería (min 1380W) para garantizar el arranque #}
+            {% set buffered_power = [ net_solar, 1380 ] | max %}
+            {{ [ [ (buffered_power - grid_penalty), headroom ] | min, 0 ] | max }}
+          {% endif %}
+        {% else %}
+          {# BATERÍA SECA: Pura supervivencia solar con castigo por red #}
+          {{ [ [ (net_solar - grid_penalty), headroom ] | min, 0 ] | max }}
+        {% endif %}
+
+      raw_calculated_amps: "{{ (total_available_w / 230) | int(0) }}"
+      calculated_amps: "{{ [ raw_calculated_amps, max_safe_amps ] | min }}"
+      has_enough_sun: "{{ calculated_amps >= 6 }}"
 
   # 2. FILTRO GENERAL DE CABLE
   - choose:
@@ -400,7 +530,8 @@ action:
                         {% else %}
                           {{ [ req_manual_amps, max_grid_amps ] | min }}
                         {% endif %}
-                      safe_c1_manual: "{{ [ [desired_amps, 6] | max, 32 ] | min }}"
+                      safe_wb_manual: "{{ [ [desired_amps, 6] | max, (state_attr(wb_num_ent, 'max') | float(32)) ] | min }}"
+                      safe_c1_manual: "{{ [ [desired_amps, 6] | max, (state_attr(c1_num_ent, 'max') | float(30)) ] | min }}"
 
                   # PASO 1: Wallbox Availability ON
                   - service: switch.turn_on
@@ -419,7 +550,7 @@ action:
                   # PASO 3: Wallbox amperios = amperios deseados (tope de seguridad hardware)
                   - service: number.set_value
                     target: !input wallbox_current_number
-                    data: { value: "{{ safe_c1_manual }}" }
+                    data: { value: "{{ safe_wb_manual }}" }
                     continue_on_error: true
 
                   # PASO 4: Tesla ON (solo si el usuario NO lo paró manualmente desde la app)
@@ -463,7 +594,8 @@ action:
                                 {% else %}
                                   {{ [ req_noct_amps, max_grid_amps ] | min }}
                                 {% endif %}
-                              safe_c1_noct: "{{ [ [desired_amps, 6] | max, 32 ] | min }}"
+                              safe_wb_noct: "{{ [ [desired_amps, 6] | max, (state_attr(wb_num_ent, 'max') | float(32)) ] | min }}"
+                              safe_c1_noct: "{{ [ [desired_amps, 6] | max, (state_attr(c1_num_ent, 'max') | float(30)) ] | min }}"
 
                           # PASO 1: Wallbox Availability ON
                           - service: switch.turn_on
@@ -482,7 +614,7 @@ action:
                           # PASO 3: Wallbox amperios = amperios deseados (tope de seguridad hardware)
                           - service: number.set_value
                             target: !input wallbox_current_number
-                            data: { value: "{{ safe_c1_noct }}" }
+                            data: { value: "{{ safe_wb_noct }}" }
                             continue_on_error: true
 
                           # PASO 4: Tesla ON (solo si el usuario NO lo paró manualmente desde la app)
@@ -561,7 +693,7 @@ action:
                       # Amperaje máximo seguro en modo Solar
                       max_safe_amps_house: "{{ (available_house_margin_w / 230) | int(0) }}"
                       max_safe_amps_grid: "{{ (available_grid_margin_w / 230) | int(0) }}"
-                      max_safe_amps: "{{ [ max_safe_amps_house, max_safe_amps_grid ] | min }}"
+                      max_safe_amps: "{{ max_safe_amps_house if has_energy_support else [ max_safe_amps_house, max_safe_amps_grid ] | min }}"
 
                       min_charge_sec: "{{ (states(var_min_charge_m) | float(5)) * 60 }}"
                       stop_delay_sec: "{{ (states(var_stop_delay_m) | float(3)) * 60 if (var_stop_delay_m is string and var_stop_delay_m != '' and var_stop_delay_m != 'none') else 180 }}"
@@ -570,20 +702,85 @@ action:
                       
                       current_soc: "{{ states(var_soc) | float(0) }}"
                       min_soc_req: "{{ states(var_min_soc) | float(80) }}"
-                      soc_ok: "{{ current_soc >= min_soc_req }}"
+                      target_hysteresis_soc: "{{ [ (min_soc_req + 10.0), 100.0 ] | min }}"
+                      
+                      # Comprobar si el cargador o coche está activamente cargando
+                      is_currently_charging: "{{ is_state(wb_sw_ent, 'on') or (var_c1_sw != {} and is_state(c1_sw_ent, 'on')) or (var_c2_sw != {} and is_state(c2_sw_ent, 'on')) }}"
+                      
+                      # Lógica de Histéresis de Batería Doméstica:
+                      # 1. Si ESTÁ APAGADO/PAUSADO: exige recuperar hasta el Buffer de Histéresis (min_soc + 10%, ej. 90%) para volver a arrancar.
+                      # 2. Si YA ESTÁ CARGANDO: permite continuar cargando mientras el SoC no caiga del límite mínimo (min_soc, ej. 80%).
+                      soc_ok: >-
+                        {% if is_currently_charging %}
+                          {{ current_soc >= min_soc_req }}
+                        {% else %}
+                          {{ current_soc >= target_hysteresis_soc }}
+                        {% endif %}
                       
                       exported_surplus_w: "{{ (net_power_w * -1) if net_power_w < 0 else 0 }}"
 
                       # Potencia real disponible para el EV:
-                      # = excedente exportado a red (podemos redirigirlo) + lo que ya consume el EV
-                      # Si la batería tiene SoC suficiente, puede aportar potencia adicional
-                      base_available_w: "{{ exported_surplus_w + ev_current_w }}"
-                      bat_available_w: "{{ bat_discharging_w if soc_ok else 0 }}"
-
-                      total_available_w: "{{ [ (base_available_w + bat_available_w), effective_house_limit_w ] | min }}"
+                      # Si la batería doméstica tiene SoC >= SoC Mínimo, suple la demanda extra necesaria
+                      # para alcanzar al menos 6A (1.380W) de arranque o más, sin importar si estaba entregando 0W.
+                      total_available_w: >-
+                        {% set raw_pv = states(var_pv_power) | float(0) %}
+                        {% set pv_w = (raw_pv * 1000) if (raw_pv > 0 and raw_pv <= 50) else raw_pv %}
+                        
+                        {# Lectura de batería e histéresis #}
+                        {% set raw_soc = states(var_soc) | float(0) %}
+                        {% set min_soc = states(var_min_soc) | float(50) %}
+                        {% set hyst_soc = [ (min_soc + 10.0), 100.0 ] | min %}
+                        
+                        {# Estado del cargador y amperios actuales #}
+                        {% set wb_on = is_state(wb_sw_ent, 'on') %}
+                        {% set c1_on = var_c1_sw != {} and is_state(c1_sw_ent, 'on') %}
+                        {% set c2_on = var_c2_sw != {} and is_state(c2_sw_ent, 'on') %}
+                        {% set is_chg = wb_on or c1_on or c2_on %}
+                        
+                        {% set c1_a = states(c1_num_ent) | float(0) if (var_c1_num is string and var_c1_num != '' and c1_on) else 0 %}
+                        {% set c2_a = states(c2_num_ent) | float(0) if (var_c2_num is string and var_c2_num != '' and c2_on) else 0 %}
+                        {% set wb_a = states(wb_num_ent) | float(0) if wb_on else 0 %}
+                        {% set ev_current = ((c1_a + c2_a) if (c1_a > 0 or c2_a > 0) else wb_a) * 230 %}
+                        
+                        {# Consumo real de la casa (SIN EL COCHE) #}
+                        {% set raw_house = states(var_house_power) | float(0) %}
+                        {% set house_total = (raw_house * 1000) if (raw_house > 0 and raw_house <= 50) else raw_house %}
+                        {% set house_loads = [ (house_total - ev_current), 0 ] | max %}
+                        
+                        {# Excedente solar neto real #}
+                        {% set net_solar = [ (pv_w - house_loads), 0 ] | max %}
+                        
+                        {# CONTROL DE RED (Tolerancia 500W y límite 3.5kW) #}
+                        {% set raw_grid_val = states(var_net_power) | float(0) %}
+                        {% set raw_grid_w = (raw_grid_val * 1000) if (raw_grid_val > -50 and raw_grid_val < 50 and raw_grid_val != 0) else raw_grid_val %}
+                        {% set net_power_w = (raw_grid_w * -1) if var_sign_setting == 'Positiva (+)' else raw_grid_w %}
+                        {% set grid_import = net_power_w if net_power_w > 0 else 0 %}
+                        {% set grid_penalty = [ (grid_import - 500), 0 ] | max %}
+                        
+                        {# Límite máximo de la casa combinado (10kW) #}
+                        {% set raw_house_lim = states(var_max_house_w) | float(10000) if (var_max_house_w is string and var_max_house_w != '' and var_max_house_w != 'none') else 10000 %}
+                        {% set limit_comb = (raw_house_lim * 1000) if (raw_house_lim > 0 and raw_house_lim <= 100) else raw_house_lim %}
+                        {% set headroom = [ (limit_comb - house_loads), 0 ] | max %}
+                        
+                        {# ¿Tiene la batería carga suficiente? #}
+                        {% set soc_ok = (raw_soc >= min_soc) if is_chg else (raw_soc >= hyst_soc) %}
+                        
+                        {% if soc_ok %}
+                          {% if is_chg and raw_soc < hyst_soc %}
+                            {# ZONA DE AMORTIGUACIÓN: Solo usamos el sol neto, castigado por la red si hay picos > 500W #}
+                            {{ [ [ (net_solar - grid_penalty), headroom ] | min, 0 ] | max }}
+                          {% else %}
+                            {# BATERÍA SANA: El sol más el apoyo de batería (min 1380W) para garantizar el arranque #}
+                            {% set buffered_power = [ net_solar, 1380 ] | max %}
+                            {{ [ [ (buffered_power - grid_penalty), headroom ] | min, 0 ] | max }}
+                          {% endif %}
+                        {% else %}
+                          {# BATERÍA SECA: Pura supervivencia solar con castigo por red #}
+                          {{ [ [ (net_solar - grid_penalty), headroom ] | min, 0 ] | max }}
+                        {% endif %}
 
                       raw_calculated_amps: "{{ (total_available_w / 230) | int(0) }}"
-                      calculated_amps: "{{ [ raw_calculated_amps, max_safe_amps ] | min }}"
+                      calculated_amps: "{{ [ raw_calculated_amps, max_safe_amps, 30 ] | min }}"
                       has_enough_sun: "{{ calculated_amps >= 6 }}"
 
                       estrategia_val: "{{ states(var_estrategia) if var_estrategia != {} else 'Equitativo (50/50)' }}"
@@ -642,11 +839,12 @@ action:
                                         continue_on_error: true
                                   - if:
                                       - condition: template
-                                        value_template: "{{ (states(wb_num_ent) | float(0)) != 32 }}"
+                                        value_template: "{{ var_wb_num != {} and wb_num_ent != c1_num_ent and (states(wb_num_ent) | float(0)) != (state_attr(wb_num_ent, 'max') | float(32)) }}"
                                     then:
                                       - service: number.set_value
                                         target: !input wallbox_current_number
-                                        data: { value: 32 }
+                                        data:
+                                          value: "{{ state_attr(wb_num_ent, 'max') | float(32) }}"
                                         continue_on_error: true
                                   - if:
                                       - condition: template
@@ -668,14 +866,18 @@ action:
                                               {{ raw_target_c1 }}
                                             {% endif %}
 
-                                          safe_c1_amps: "{{ [target_c1, 32] | min }}"
+                                          safe_c1_amps: >-
+                                            {% set m_attr = state_attr(c1_num_ent, 'max') %}
+                                            {% set m_lim = (m_attr | float(30)) if (m_attr is not none and m_attr != 'none') else 30 %}
+                                            {% set hard_cap = [ m_lim, 30 ] | min %}
+                                            {{ [ (target_c1 | float(6)), hard_cap ] | min | int }}
                                       - service: switch.turn_on
                                         target: !input car_1_switch
                                         continue_on_error: true
                                       - service: number.set_value
                                         target: !input car_1_current_number
                                         data:
-                                          value: "{{ safe_c1_amps }}"
+                                          value: "{{ [ safe_c1_amps | float(6), 30 ] | min | int }}"
                                         continue_on_error: true
                                   - if:
                                       - condition: template
@@ -696,7 +898,11 @@ action:
                                               {{ raw_target_c2 }}
                                             {% endif %}
 
-                                          safe_c2_amps: "{{ [target_c2, 32] | min }}"
+                                          safe_c2_amps: >-
+                                            {% set m_attr = state_attr(c2_num_ent, 'max') %}
+                                            {% set m_lim = (m_attr | float(30)) if (m_attr is not none and m_attr != 'none') else 30 %}
+                                            {% set hard_cap = [ m_lim, 30 ] | min %}
+                                            {{ [ (target_c2 | float(6)), hard_cap ] | min | int }}
                                       - service: switch.turn_on
                                         target: !input car_2_switch
                                         continue_on_error: true
@@ -729,7 +935,10 @@ action:
                                       {{ raw_target_wb }}
                                     {% endif %}
 
-                                  safe_wb_amps: "{{ [target_wb, 32] | min }}"
+                                  safe_wb_amps: >-
+                                    {% set m_attr = state_attr(wb_num_ent, 'max') %}
+                                    {% set m_lim = (m_attr | float(32)) if (m_attr is not none) else 32 %}
+                                    {{ [ (target_wb | float(6)), m_lim ] | min | int }}
                               - service: number.set_value
                                 target: !input wallbox_current_number
                                 data:
