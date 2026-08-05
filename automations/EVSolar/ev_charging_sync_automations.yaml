@@ -25,6 +25,8 @@
   trigger:
     - platform: state
       entity_id: number.garaje_nafnaf_corriente_de_carga
+      for:
+        seconds: 30
   condition:
     - condition: template
       value_template: >
