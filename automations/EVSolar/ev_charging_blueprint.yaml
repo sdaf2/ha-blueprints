@@ -685,7 +685,7 @@ action:
                                               {{ raw_target_c1 }}
                                             {% endif %}
 
-                                          safe_c1_amps: "{{ [ (target_c1 | float(6)), 30 ] | min | int }}"
+                                          safe_c1_amps: "{{ [ (target_c1 | float(6)), 32 ] | min | int }}"
                                       - if:
                                           - condition: template
                                             value_template: "{{ not is_state(c1_sw_ent, 'on') }}"
@@ -721,7 +721,7 @@ action:
                                               {{ raw_target_c2 }}
                                             {% endif %}
 
-                                          safe_c2_amps: "{{ [ (target_c2 | float(6)), 30 ] | min | int }}"
+                                          safe_c2_amps: "{{ [ (target_c2 | float(6)), 32 ] | min | int }}"
                                       - if:
                                           - condition: template
                                             value_template: "{{ not is_state(c2_sw_ent, 'on') }}"
