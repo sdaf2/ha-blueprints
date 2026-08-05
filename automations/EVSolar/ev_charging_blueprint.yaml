@@ -550,10 +550,10 @@ action:
                         target: !input wallbox_charge_control_switch
                         continue_on_error: true
 
-                  # PASO 3: Wallbox amperios = amperios deseados (tope de seguridad hardware)
+                  # PASO 3: Wallbox amperios = amperios deseados (control principal del consumo)
                   - if:
                       - condition: template
-                        value_template: "{{ var_wb_num != {} and wb_num_ent != c1_num_ent and (states(wb_num_ent) | float(0)) != (safe_wb_manual | float(0)) }}"
+                        value_template: "{{ wb_num_ent != '' and (states(wb_num_ent) | float(0)) != (safe_wb_manual | float(0)) }}"
                     then:
                       - service: number.set_value
                         target: !input wallbox_current_number
@@ -569,10 +569,10 @@ action:
                         target: !input car_1_switch
                         continue_on_error: true
 
-                  # PASO 5: Tesla amperios
+                  # PASO 5: Tesla amperios (solo si NO hay Wallbox separado - control directo)
                   - if:
                       - condition: template
-                        value_template: "{{ (states(c1_num_ent) | float(0)) != (safe_c1_manual | float(0)) }}"
+                        value_template: "{{ (wb_num_ent == '' or wb_num_ent == c1_num_ent) and (states(c1_num_ent) | float(0)) != (safe_c1_manual | float(0)) }}"
                     then:
                       - service: number.set_value
                         target: !input car_1_current_number
@@ -626,10 +626,10 @@ action:
                                 target: !input wallbox_charge_control_switch
                                 continue_on_error: true
 
-                          # PASO 3: Wallbox amperios = amperios deseados (tope de seguridad hardware)
+                          # PASO 3: Wallbox amperios = amperios deseados (control principal del consumo)
                           - if:
                               - condition: template
-                                value_template: "{{ var_wb_num != {} and wb_num_ent != c1_num_ent and (states(wb_num_ent) | float(0)) != (safe_wb_noct | float(0)) }}"
+                                value_template: "{{ wb_num_ent != '' and (states(wb_num_ent) | float(0)) != (safe_wb_noct | float(0)) }}"
                             then:
                               - service: number.set_value
                                 target: !input wallbox_current_number
@@ -645,10 +645,10 @@ action:
                                 target: !input car_1_switch
                                 continue_on_error: true
 
-                          # PASO 5: Tesla amperios
+                          # PASO 5: Tesla amperios (solo si NO hay Wallbox separado - control directo)
                           - if:
                               - condition: template
-                                value_template: "{{ (states(c1_num_ent) | float(0)) != (safe_c1_noct | float(0)) }}"
+                                value_template: "{{ (wb_num_ent == '' or wb_num_ent == c1_num_ent) and (states(c1_num_ent) | float(0)) != (safe_c1_noct | float(0)) }}"
                             then:
                               - service: number.set_value
                                 target: !input car_1_current_number
@@ -902,7 +902,16 @@ action:
                                             continue_on_error: true
                                       - if:
                                           - condition: template
-                                            value_template: "{{ (states(c1_num_ent) | float(0)) != (safe_c1_amps | float(0)) }}"
+                                            value_template: "{{ wb_num_ent != '' and wb_num_ent != c1_num_ent and (states(wb_num_ent) | float(0)) != (safe_c1_amps | float(0)) }}"
+                                        then:
+                                          - service: number.set_value
+                                            target: !input wallbox_current_number
+                                            data:
+                                              value: "{{ safe_c1_amps | int }}"
+                                            continue_on_error: true
+                                      - if:
+                                          - condition: template
+                                            value_template: "{{ (wb_num_ent == '' or wb_num_ent == c1_num_ent) and (states(c1_num_ent) | float(0)) != (safe_c1_amps | float(0)) }}"
                                         then:
                                           - service: number.set_value
                                             target: !input car_1_current_number
