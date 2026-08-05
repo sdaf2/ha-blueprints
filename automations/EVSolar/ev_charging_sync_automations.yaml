@@ -1,172 +1,153 @@
 # =============================================================================
-# EV CHARGING SYNC AUTOMATIONS
+# EV CHARGING SYNC AUTOMATIONS (Sincronización Bidireccional App Tesla ↔ HA)
 # =============================================================================
-# Estas automatizaciones complementan el blueprint principal con:
-#   1. Sync Tesla → HA: si se cambia amperaje desde la app Tesla, actualiza la variable HA
-#   2. Detección de parada manual desde Tesla: si el usuario para desde la app,
-#      activa ev_tesla_parado_usuario para que el blueprint no fuerce el reinicio
-#   3. Reset de variables al desconectar el cable
-#   4. Reset de variables al seleccionar modo Apagado
-#
-# INSTRUCCIONES DE INSTALACIÓN:
-#   Añade en configuration.yaml:
-#     automation: !include_dir_merge_list automations/
-#   Y mueve este archivo a la carpeta automations/ de HA.
-#   O bien, añade cada automatización manualmente desde la UI de HA.
+# Estas automatizaciones complementan el blueprint principal permitiendo que:
+#   1. Si el usuario pulsa "Iniciar Carga" en la App de Tesla:
+#      - HA cambia automáticamente el modo a "Nocturno / Finde" (si es de noche)
+#      - O cambia a "Manual" (si es de día).
+#   2. Si el usuario pulsa "Detener Carga" en la App de Tesla:
+#      - HA cambia automáticamente el modo a "Apagado".
+#   3. Si el usuario cambia el amperaje en la App de Tesla:
+#      - HA actualiza la barra de amperios de modo manual.
+#   4. Reset automático al desconectar el cable.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# AUTOMATIZACIÓN 1: Sync Tesla → HA (amperaje)
-# Si el usuario cambia el amperaje desde la app Tesla, actualiza la variable HA
+# AUTOMATIZACIÓN 1: Sync Tesla App → HA (Amperaje)
 # -----------------------------------------------------------------------------
 - id: ev_sync_tesla_to_ha_amps
-  alias: "⚡ EV Sync: Tesla → HA Amperaje"
+  alias: "⚡ EV Sync: App Tesla → HA Amperaje"
   description: >
-    Cuando el amperaje del Tesla cambia (p.ej. desde la app Tesla o desde el coche),
-    actualiza la variable de HA para que queden sincronizadas.
-    Evita bucles comprobando que el valor ya no sea igual.
+    Si el usuario cambia el amperaje desde la app Tesla o pantalla del coche,
+    actualiza el slider de amperios en Home Assistant.
   mode: single
   max_exceeded: silent
   trigger:
     - platform: state
       entity_id: number.garaje_nafnaf_corriente_de_carga
   condition:
-    # Solo sincronizar si estamos en modo Manual o Nocturno (en Solar el blueprint calcula sus propios valores)
-    - condition: template
-      value_template: >
-        {{ states('input_select.ev_modo_carga') in ['Manual', 'Nocturno / Finde',
-           'Automático (Solar de día / Nocturno de noche)'] }}
-    # Evitar bucle: solo actuar si el valor del Tesla es diferente al de la variable HA
-    - condition: template
-      value_template: >
-        {{ (trigger.to_state.state | float(-1)) != (states('input_number.amperios_carga_manual') | float(-2)) }}
-    # Ignorar estados inválidos
     - condition: template
       value_template: >
         {{ trigger.to_state.state not in ['unknown', 'unavailable', 'none'] }}
   action:
-    - service: input_number.set_value
-      target:
-        entity_id: input_number.amperios_carga_manual
-      data:
-        value: "{{ trigger.to_state.state | float(16) | round(0) | int }}"
+    - if:
+        - condition: template
+          value_template: "{{ states('input_number.amperios_carga_manual') != 'unknown' }}"
+      then:
+        - service: input_number.set_value
+          target:
+            entity_id: input_number.amperios_carga_manual
+          data:
+            value: "{{ trigger.to_state.state | float(16) | round(0) | int }}"
+          continue_on_error: true
+    - if:
+        - condition: template
+          value_template: "{{ states('input_number.evsmartampere') != 'unknown' }}"
+      then:
+        - service: input_number.set_value
+          target:
+            entity_id: input_number.evsmartampere
+          data:
+            value: "{{ trigger.to_state.state | float(16) | round(0) | int }}"
+          continue_on_error: true
 
 # -----------------------------------------------------------------------------
-# AUTOMATIZACIÓN 2: Detección de parada manual desde Tesla
-# Si el switch de carga del Tesla pasa a OFF mientras el modo es Manual o Nocturno,
-# activa la bandera "parado por usuario" para que el blueprint no fuerce el reinicio
+# AUTOMATIZACIÓN 2: App Tesla "Iniciar Carga" → Activa Modo Manual / Nocturno en HA
 # -----------------------------------------------------------------------------
-- id: ev_detect_tesla_user_stop
-  alias: "🛑 EV Sync: Detectar Parada Manual desde Tesla"
+- id: ev_sync_tesla_start_to_ha_mode
+  alias: "🚀 EV Sync: App Tesla Iniciar Carga → Activa Modo en HA"
   description: >
-    Si el usuario para la carga desde la app Tesla (el switch pasa a OFF),
-    activa ev_tesla_parado_usuario para impedir que el blueprint lo fuerce a arrancar.
-    Se resetea cuando el usuario vuelve a arrancar desde HA o desconecta el cable.
+    Si el usuario pulsa 'Iniciar Carga' en la App de Tesla mientras HA está en Apagado,
+    HA cambia el modo a Nocturno (si es de noche) o a Manual (si es de día).
   mode: single
   trigger:
     - platform: state
       entity_id: switch.garaje_nafnaf_carga
-      to: "off"
+      from: "off"
+      to: "on"
+      for:
+        seconds: 5
   condition:
-    # Solo en modos donde el blueprint forzaría el reinicio
+    # Solo actuar si el modo actual en HA es Apagado o si estaba marcado como parado por usuario
     - condition: template
       value_template: >
-        {{ states('input_select.ev_modo_carga') in ['Manual', 'Nocturno / Finde',
-           'Automático (Solar de día / Nocturno de noche)'] }}
-    # La bandera no estaba ya activa (evitar triggers duplicados)
-    - condition: state
-      entity_id: input_boolean.ev_tesla_parado_usuario
-      state: "off"
+        {{ states('input_select.ev_modo_carga') == 'Apagado' or is_state('input_boolean.ev_tesla_parado_usuario', 'on') }}
+  action:
+    - service: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.ev_tesla_parado_usuario
+    - choose:
+        # Si estamos en horario nocturno -> Pasar a Nocturno / Finde
+        - conditions:
+            - condition: template
+              value_template: >
+                {% set h_start = states('input_datetime.hora_inicio_nocturna') %}
+                {% set h_finish = states('input_datetime.hora_fin_nocturna') %}
+                {% set now_time = now().strftime('%H:%M:%S') %}
+                {% if h_start <= h_finish %}
+                  {{ now_time >= h_start and now_time <= h_finish }}
+                {% else %}
+                  {{ now_time >= h_start or now_time <= h_finish }}
+                {% endif %}
+          sequence:
+            - service: input_select.select_option
+              target:
+                entity_id: input_select.ev_modo_carga
+              data:
+                option: "Nocturno / Finde"
+      default:
+        # De día -> Pasar a Manual
+        - service: input_select.select_option
+          target:
+            entity_id: input_select.ev_modo_carga
+          data:
+            option: "Manual"
+
+# -----------------------------------------------------------------------------
+# AUTOMATIZACIÓN 3: App Tesla "Detener Carga" → Activa Modo Apagado en HA
+# -----------------------------------------------------------------------------
+- id: ev_sync_tesla_stop_to_ha_mode
+  alias: "🛑 EV Sync: App Tesla Detener Carga → Modo Apagado en HA"
+  description: >
+    Si el usuario detiene la carga manualmente desde la App de Tesla,
+    cambia el selector global de HA a 'Apagado' para reflejar la intención del usuario.
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: switch.garaje_nafnaf_carga
+      from: "on"
+      to: "off"
+      for:
+        seconds: 15
+  condition:
+    - condition: template
+      value_template: >
+        {{ states('input_select.ev_modo_carga') != 'Apagado' }}
   action:
     - service: input_boolean.turn_on
       target:
         entity_id: input_boolean.ev_tesla_parado_usuario
-
-# -----------------------------------------------------------------------------
-# AUTOMATIZACIÓN 3: Reset bandera "parado por usuario" al arrancar desde HA
-# Si el usuario vuelve a arrancar desde el slider de HA (cambia el amperaje),
-# la bandera se limpia para permitir que el blueprint controle de nuevo
-# -----------------------------------------------------------------------------
-- id: ev_reset_user_stop_on_ha_change
-  alias: "✅ EV Sync: Limpiar Parada-Usuario al cambiar Amperaje desde HA"
-  description: >
-    Cuando el usuario mueve el slider de amperaje en HA, interpreta que
-    quiere reanudar la carga y limpia la bandera de parada de usuario.
-  mode: single
-  trigger:
-    - platform: state
-      entity_id: input_number.amperios_carga_manual
-    - platform: state
-      entity_id: input_number.amperios_carga_nocturna
-  condition:
-    - condition: state
-      entity_id: input_boolean.ev_tesla_parado_usuario
-      state: "on"
-  action:
-    - service: input_boolean.turn_off
+    - service: input_select.select_option
       target:
-        entity_id: input_boolean.ev_tesla_parado_usuario
+        entity_id: input_select.ev_modo_carga
+      data:
+        option: "Apagado"
 
 # -----------------------------------------------------------------------------
-# AUTOMATIZACIÓN 4: Reset de variables al desconectar el cable del Tesla
+# AUTOMATIZACIÓN 4: Reset al Desconectar el Cable
 # -----------------------------------------------------------------------------
 - id: ev_reset_on_cable_disconnect
-  alias: "🔌 EV Sync: Reset Variables al Desconectar Cable Tesla"
+  alias: "🔌 EV Sync: Reset al Desconectar Cable"
   description: >
-    Cuando se desconecta el cable del Tesla (sensor pasa a desconectado),
-    resetea las variables internas a valores por defecto para el próximo ciclo de carga.
+    Al desenchufar el cable del Tesla, resetea banderas de usuario.
   mode: single
   trigger:
     - platform: state
-      entity_id: binary_sensor.garaje_nafnaf_cable_de_carga
+      entity_id: binary_sensor.garaje_nafnaf_estado
       to: "off"
       for:
-        seconds: 10  # pequeño retardo para evitar flapping
+        seconds: 10
   action:
-    # Limpiar bandera de parado por usuario
     - service: input_boolean.turn_off
       target:
         entity_id: input_boolean.ev_tesla_parado_usuario
-    # Resetear amperaje manual al valor inicial
-    - service: input_number.set_value
-      target:
-        entity_id: input_number.amperios_carga_manual
-      data:
-        value: 16
-    # Resetear amperaje nocturno al valor inicial
-    - service: input_number.set_value
-      target:
-        entity_id: input_number.amperios_carga_nocturna
-      data:
-        value: 16
-
-# -----------------------------------------------------------------------------
-# AUTOMATIZACIÓN 5: Reset de variables al seleccionar modo Apagado
-# -----------------------------------------------------------------------------
-- id: ev_reset_on_apagado_mode
-  alias: "⏹️ EV Sync: Reset Variables al seleccionar Modo Apagado"
-  description: >
-    Cuando se selecciona el modo Apagado, resetea todas las variables internas
-    para que el siguiente modo empiece desde un estado limpio.
-  mode: single
-  trigger:
-    - platform: state
-      entity_id: input_select.ev_modo_carga
-      to: "Apagado"
-  action:
-    # Limpiar bandera de parado por usuario
-    - service: input_boolean.turn_off
-      target:
-        entity_id: input_boolean.ev_tesla_parado_usuario
-    # Resetear amperaje manual al valor inicial
-    - service: input_number.set_value
-      target:
-        entity_id: input_number.amperios_carga_manual
-      data:
-        value: 16
-    # Resetear amperaje nocturno al valor inicial
-    - service: input_number.set_value
-      target:
-        entity_id: input_number.amperios_carga_nocturna
-      data:
-        value: 16
