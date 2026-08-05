@@ -558,7 +558,7 @@ action:
                       - service: number.set_value
                         target: !input car_1_current_number
                         data:
-                          value: "{{ [ safe_c1_manual | int, (state_attr(c1_num_ent, 'max') | float(32)) ] | min | int }}"
+                          value: "{{ safe_c1_manual | int }}"
                         continue_on_error: true
 
               # -------------------------------------------------------------
@@ -625,7 +625,7 @@ action:
                               - service: number.set_value
                                 target: !input car_1_current_number
                                 data:
-                                  value: "{{ [ safe_c1_noct | int, (state_attr(c1_num_ent, 'max') | float(32)) ] | min | int }}"
+                                  value: "{{ safe_c1_noct | int }}"
                                 continue_on_error: true
 
                     default:
@@ -871,7 +871,7 @@ action:
                                           - service: number.set_value
                                             target: !input car_1_current_number
                                             data:
-                                              value: "{{ [ safe_c1_amps | float(6), (state_attr(c1_num_ent, 'max') | float(32)) ] | min | int }}"
+                                              value: "{{ safe_c1_amps | int }}"
                                             continue_on_error: true
                                   - if:
                                       - condition: template
