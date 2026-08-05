@@ -529,13 +529,17 @@ action:
                         {% else %}
                           {{ [ req_manual_amps, max_grid_amps ] | min }}
                         {% endif %}
-                      safe_wb_manual: "{{ [ [desired_amps, 6] | max, (state_attr(wb_num_ent, 'max') | float(32)) ] | min | int }}"
-                      safe_c1_manual: "{{ [ [desired_amps, 6] | max, (state_attr(c1_num_ent, 'max') | float(30)) ] | min | int }}"
+                      safe_wb_manual: "{{ [ [desired_amps, 6] | max, 32 ] | min | int }}"
+                      safe_c1_manual: "{{ [ [desired_amps, 6] | max, 32 ] | min | int }}"
 
-                  # PASO 1: Wallbox Availability ON
-                  - service: switch.turn_on
-                    target: !input wallbox_switch
-                    continue_on_error: true
+                  # PASO 1: Wallbox Availability ON (solo si no está ya encendido)
+                  - if:
+                      - condition: template
+                        value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
+                    then:
+                      - service: switch.turn_on
+                        target: !input wallbox_switch
+                        continue_on_error: true
 
                   # PASO 2: Wallbox Charge Control ON
                   - if:
@@ -556,10 +560,10 @@ action:
                         data: { value: "{{ safe_wb_manual }}" }
                         continue_on_error: true
 
-                  # PASO 4: Tesla ON (solo si el usuario NO lo paró manualmente desde la app)
+                  # PASO 4: Tesla ON (solo si no está ya encendido y el usuario NO lo paró)
                   - if:
                       - condition: template
-                        value_template: "{{ not is_state('input_boolean.ev_tesla_parado_usuario', 'on') }}"
+                        value_template: "{{ not is_state('input_boolean.ev_tesla_parado_usuario', 'on') and not is_state(c1_sw_ent, 'on') }}"
                     then:
                       - service: switch.turn_on
                         target: !input car_1_switch
@@ -601,13 +605,17 @@ action:
                                 {% else %}
                                   {{ [ req_noct_amps, max_grid_amps ] | min }}
                                 {% endif %}
-                              safe_wb_noct: "{{ [ [desired_amps, 6] | max, (state_attr(wb_num_ent, 'max') | float(32)) ] | min | int }}"
-                              safe_c1_noct: "{{ [ [desired_amps, 6] | max, (state_attr(c1_num_ent, 'max') | float(30)) ] | min | int }}"
+                              safe_wb_noct: "{{ [ [desired_amps, 6] | max, 32 ] | min | int }}"
+                              safe_c1_noct: "{{ [ [desired_amps, 6] | max, 32 ] | min | int }}"
 
-                          # PASO 1: Wallbox Availability ON
-                          - service: switch.turn_on
-                            target: !input wallbox_switch
-                            continue_on_error: true
+                          # PASO 1: Wallbox Availability ON (solo si no está ya encendido)
+                          - if:
+                              - condition: template
+                                value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
+                            then:
+                              - service: switch.turn_on
+                                target: !input wallbox_switch
+                                continue_on_error: true
 
                           # PASO 2: Wallbox Charge Control ON
                           - if:
@@ -628,10 +636,10 @@ action:
                                 data: { value: "{{ safe_wb_noct }}" }
                                 continue_on_error: true
 
-                          # PASO 4: Tesla ON (solo si el usuario NO lo paró manualmente desde la app)
+                          # PASO 4: Tesla ON (solo si no está ya encendido y el usuario NO lo paró)
                           - if:
                               - condition: template
-                                value_template: "{{ not is_state('input_boolean.ev_tesla_parado_usuario', 'on') }}"
+                                value_template: "{{ not is_state('input_boolean.ev_tesla_parado_usuario', 'on') and not is_state(c1_sw_ent, 'on') }}"
                             then:
                               - service: switch.turn_on
                                 target: !input car_1_switch
