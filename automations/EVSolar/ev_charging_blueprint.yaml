@@ -852,11 +852,7 @@ action:
                                               {{ raw_target_c1 }}
                                             {% endif %}
 
-                                          safe_c1_amps: >-
-                                            {% set m_attr = state_attr(c1_num_ent, 'max') %}
-                                            {% set m_lim = (m_attr | float(30)) if (m_attr is not none and m_attr != 'none') else 30 %}
-                                            {% set hard_cap = [ m_lim, 30 ] | min %}
-                                            {{ [ (target_c1 | float(6)), hard_cap ] | min | int }}
+                                          safe_c1_amps: "{{ [ (target_c1 | float(6)), 30 ] | min | int }}"
                                       - if:
                                           - condition: template
                                             value_template: "{{ not is_state(c1_sw_ent, 'on') }}"
@@ -892,11 +888,7 @@ action:
                                               {{ raw_target_c2 }}
                                             {% endif %}
 
-                                          safe_c2_amps: >-
-                                            {% set m_attr = state_attr(c2_num_ent, 'max') %}
-                                            {% set m_lim = (m_attr | float(30)) if (m_attr is not none and m_attr != 'none') else 30 %}
-                                            {% set hard_cap = [ m_lim, 30 ] | min %}
-                                            {{ [ (target_c2 | float(6)), hard_cap ] | min | int }}
+                                          safe_c2_amps: "{{ [ (target_c2 | float(6)), 30 ] | min | int }}"
                                       - if:
                                           - condition: template
                                             value_template: "{{ not is_state(c2_sw_ent, 'on') }}"
