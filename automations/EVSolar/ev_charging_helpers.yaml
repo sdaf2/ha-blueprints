@@ -1,29 +1,27 @@
-# ==============================================================================
-# PAQUETE DE AYUDANTES (HELPERS) PARA EL CONTROL DE CARGA DEL VEHÍCULO ELÉCTRICO
-# Ubicación: ev_charging_control/ev_charging_helpers.yaml
-# ==============================================================================
-
 input_select:
-  modo_carga_ev:
-    name: "Modo Carga EV"
+  ev_modo_carga:
+    name: "Modo de Carga de Vehículo Eléctrico"
     options:
       - "Apagado"
-      - "Manual"
-      - "Nocturno / Finde"
+      - "Automático (Solar de día / Nocturno de noche)"
       - "Solar"
-    icon: mdi:ev-station
+      - "Nocturno / Finde"
+      - "Manual"
+    initial: "Automático (Solar de día / Nocturno de noche)"
+    icon: mdi:car-electric-delight
 
-  estrategia_reparto_ev:
-    name: "Estrategia Reparto Multi-Vehículo"
+  ev_estrategia_reparto:
+    name: "Estrategia de Reparto Multi-Vehículo"
     options:
       - "Equitativo (50/50)"
       - "Prioridad (Coche 1)"
       - "Porcentaje Personalizado"
+    initial: "Equitativo (50/50)"
     icon: mdi:scale-balance
 
 input_number:
   amperios_carga_manual:
-    name: "Amperaje Carga Manual"
+    name: "Amperaje Modo Manual"
     min: 6
     max: 32
     step: 1
@@ -32,7 +30,7 @@ input_number:
     icon: mdi:current-ac
 
   amperios_carga_nocturna:
-    name: "Amperaje Carga Nocturna / Finde"
+    name: "Amperaje Modo Nocturno"
     min: 6
     max: 32
     step: 1
@@ -40,41 +38,41 @@ input_number:
     unit_of_measurement: "A"
     icon: mdi:weather-night
 
-  ev_solar_min_battery_soc:
-    name: "Mínimo SoC Batería Casa para Carga Solar"
-    min: 0
-    max: 100
-    step: 5
-    initial: 80
-    unit_of_measurement: "%"
-    icon: mdi:battery-charging-80
-
   potencia_maxima_casa_w:
-    name: "Límite Potencia Combinada (Solar / Batería)"
+    name: "Límite Potencia Combinada (Solar/Batería)"
     min: 3000
     max: 15000
     step: 500
     initial: 10000
     unit_of_measurement: "W"
-    icon: mdi:transmission-tower-export
+    icon: mdi:home-lightning
 
   potencia_maxima_red_w:
     name: "Límite Potencia Solo Red (Sin Batería/Solar)"
-    min: 1500
+    min: 2000
     max: 10000
-    step: 500
+    step: 250
     initial: 3500
     unit_of_measurement: "W"
-    icon: mdi:power-plug-outline
+    icon: mdi:transmission-tower
 
   ev_porcentaje_coche_1:
-    name: "Porcentaje Reparto Coche 1"
+    name: "Porcentaje Carga Coche 1 (Tesla)"
     min: 0
     max: 100
     step: 5
     initial: 50
     unit_of_measurement: "%"
     icon: mdi:percent
+
+  ev_min_battery_soc:
+    name: "SoC Mínimo Batería Doméstica para Carga Solar"
+    min: 10
+    max: 100
+    step: 5
+    initial: 80
+    unit_of_measurement: "%"
+    icon: mdi:battery-charging-60
 
   ev_min_charge_time_min:
     name: "Tiempo Mínimo de Carga Continuada"
@@ -121,3 +119,8 @@ input_boolean:
     name: "Bloqueo por Cargas Prioritarias (Termo / Aerotermia)"
     initial: false
     icon: mdi:thunderstorm-outline
+
+  ev_tesla_parado_usuario:
+    name: "Tesla Parado por Usuario (no forzar reinicio)"
+    initial: false
+    icon: mdi:hand-back-left
