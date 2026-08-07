@@ -251,7 +251,7 @@ blueprint:
           domain: input_number
 
     amp_change_delay_input:
-      name: "🌊 Estabilización de Amperaje (s)"
+      name: "🌊 Estabilización de Amperaje (min)"
       selector:
         entity:
           domain: input_number
@@ -447,7 +447,7 @@ action:
 
       min_charge_sec: "{{ (states(var_min_charge_m) | float(5)) * 60 if (var_min_charge_m is string and var_min_charge_m != '' and var_min_charge_m != 'none') else 300 }}"
       stop_delay_sec: "{{ (states(var_stop_delay_m) | float(3)) * 60 if (var_stop_delay_m is string and var_stop_delay_m != '' and var_stop_delay_m != 'none') else 180 }}"
-      amp_delay_sec: "{{ states(var_amp_delay_s) | float(60) if (var_amp_delay_s is string and var_amp_delay_s != '' and var_amp_delay_s != 'none') else 60 }}"
+      amp_delay_sec: "{{ ((states(var_amp_delay_s) | float(2)) * 60) if (var_amp_delay_s is string and var_amp_delay_s != '' and var_amp_delay_s != 'none') else 120 }}"
 
       soc_ok: >-
         {% if is_currently_charging %}
