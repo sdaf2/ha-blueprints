@@ -501,7 +501,7 @@ action:
                         {% set max_g = (lim_g / 230) | int(15) %}
                         {{ req_manual_amps if energy_ok else [req_manual_amps, max_g] | min }}
                       safe_wb_manual: "{{ [ [desired_amps | int, 6] | max, 32 ] | min | int }}"
-                      safe_c1_manual: "{{ [ [desired_amps | int, 6] | max, 30 ] | min | int }}"
+                      safe_c1_manual: "{{ [ [desired_amps | int, 6] | max, 32 ] | min | int }}"
 
                   # PASO 1: Wallbox Availability ON (solo si no está ya encendido)
                   - if:
@@ -555,7 +555,7 @@ action:
                                 {% set max_g = (lim_g / 230) | int(15) %}
                                 {{ req_noct_amps if energy_ok else [req_noct_amps, max_g] | min }}
                               safe_wb_noct: "{{ [ [desired_amps | int, 6] | max, 32 ] | min | int }}"
-                              safe_c1_noct: "{{ [ [desired_amps | int, 6] | max, 30 ] | min | int }}"
+                              safe_c1_noct: "{{ [ [desired_amps | int, 6] | max, 32 ] | min | int }}"
 
                           # PASO 1: Wallbox Availability ON (solo si no está ya encendido)
                           - if:
@@ -689,7 +689,7 @@ action:
                                               {{ raw_target_c1 }}
                                             {% endif %}
 
-                                          safe_c1_amps: "{{ [ (target_c1 | float(6)), 30 ] | min | int }}"
+                                          safe_c1_amps: "{{ [ (target_c1 | float(6)), 32 ] | min | int }}"
                                       - if:
                                           - condition: template
                                             value_template: "{{ not is_state(c1_sw_ent, 'on') }}"
