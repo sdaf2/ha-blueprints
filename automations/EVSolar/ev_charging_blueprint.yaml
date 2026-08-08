@@ -868,54 +868,54 @@ action:
                                     continue_on_error: true
 
                       # --- NO HAY SOL / BLOQUEO PRIORITARIO (PAUSA / APAGADO SOLAR) ---
-                      default:
-                        - variables:
-                            c1_sw_objs: "{{ expand(c1_sw_ent) if c1_sw_ent != '' else [] }}"
-                            wb_sw_objs: "{{ expand(wb_sw_ent) if wb_sw_ent != '' else [] }}"
-                            c1_last_chg: "{{ c1_sw_objs[0].last_changed if (c1_sw_objs | length > 0 and c1_sw_objs[0].last_changed is defined) else none }}"
-                            wb_last_chg: "{{ wb_sw_objs[0].last_changed if (wb_sw_objs | length > 0 and wb_sw_objs[0].last_changed is defined) else none }}"
-                            c1_charge_sec: "{{ (now() - c1_last_chg).total_seconds() if (c1_last_chg is not none and is_state(c1_sw_ent, 'on')) else 9999 }}"
-                            wb_charge_sec: "{{ (now() - wb_last_chg).total_seconds() if (wb_last_chg is not none and is_state(wb_sw_ent, 'on')) else 9999 }}"
-                            can_stop_c1: "{{ c1_charge_sec >= stop_delay_sec }}"
-                            can_stop_wb: "{{ wb_charge_sec >= stop_delay_sec }}"
+                    default:
+                      - variables:
+                          c1_sw_objs: "{{ expand(c1_sw_ent) if c1_sw_ent != '' else [] }}"
+                          wb_sw_objs: "{{ expand(wb_sw_ent) if wb_sw_ent != '' else [] }}"
+                          c1_last_chg: "{{ c1_sw_objs[0].last_changed if (c1_sw_objs | length > 0 and c1_sw_objs[0].last_changed is defined) else none }}"
+                          wb_last_chg: "{{ wb_sw_objs[0].last_changed if (wb_sw_objs | length > 0 and wb_sw_objs[0].last_changed is defined) else none }}"
+                          c1_charge_sec: "{{ (now() - c1_last_chg).total_seconds() if (c1_last_chg is not none and is_state(c1_sw_ent, 'on')) else 9999 }}"
+                          wb_charge_sec: "{{ (now() - wb_last_chg).total_seconds() if (wb_last_chg is not none and is_state(wb_sw_ent, 'on')) else 9999 }}"
+                          can_stop_c1: "{{ c1_charge_sec >= stop_delay_sec }}"
+                          can_stop_wb: "{{ wb_charge_sec >= stop_delay_sec }}"
 
-                        - choose:
-                            - conditions:
-                                - condition: template
-                                  value_template: "{{ not can_stop_c1 or not can_stop_wb }}"
-                              sequence:
-                                - if:
-                                    - condition: template
-                                      value_template: "{{ c1_num_ent != '' and is_c1_connected and is_c1_active }}"
-                                  then:
-                                    - service: number.set_value
-                                      target: !input car_1_current_number
-                                      data: { value: 6 }
-                                      continue_on_error: true
-                                - if:
-                                    - condition: template
-                                      value_template: "{{ wb_num_ent != '' }}"
-                                  then:
-                                    - service: number.set_value
-                                      target: !input wallbox_current_number
-                                      data: { value: 6 }
-                                      continue_on_error: true
+                      - choose:
+                          - conditions:
+                              - condition: template
+                                value_template: "{{ not can_stop_c1 or not can_stop_wb }}"
+                            sequence:
+                              - if:
+                                  - condition: template
+                                    value_template: "{{ c1_num_ent != '' and is_c1_connected and is_c1_active }}"
+                                then:
+                                  - service: number.set_value
+                                    target: !input car_1_current_number
+                                    data: { value: 6 }
+                                    continue_on_error: true
+                              - if:
+                                  - condition: template
+                                    value_template: "{{ wb_num_ent != '' }}"
+                                then:
+                                  - service: number.set_value
+                                    target: !input wallbox_current_number
+                                    data: { value: 6 }
+                                    continue_on_error: true
 
-                          default:
-                            - if:
-                                - condition: template
-                                  value_template: "{{ wb_sw_ent != '' and not is_state(wb_sw_ent, 'off') }}"
-                              then:
-                                - service: switch.turn_off
-                                  target: !input wallbox_switch
-                                  continue_on_error: true
-                            - if:
-                                - condition: template
-                                  value_template: "{{ c1_sw_ent != '' and not is_state(c1_sw_ent, 'off') }}"
-                              then:
-                                - service: switch.turn_off
-                                  target: !input car_1_switch
-                                  continue_on_error: true
+                        default:
+                          - if:
+                              - condition: template
+                                value_template: "{{ wb_sw_ent != '' and not is_state(wb_sw_ent, 'off') }}"
+                            then:
+                              - service: switch.turn_off
+                                target: !input wallbox_switch
+                                continue_on_error: true
+                          - if:
+                              - condition: template
+                                value_template: "{{ c1_sw_ent != '' and not is_state(c1_sw_ent, 'off') }}"
+                            then:
+                              - service: switch.turn_off
+                                target: !input car_1_switch
+                                continue_on_error: true
 
               # -------------------------------------------------------------
               # MODO 4: APAGADO
@@ -956,25 +956,25 @@ action:
                     continue_on_error: true
 
       # SI NO HAY NINGÚN CABLE CONECTADO: Apagar todo
-      default:
-        - if:
-            - condition: template
-              value_template: "{{ wb_sw_ent != '' and not is_state(wb_sw_ent, 'off') }}"
-          then:
-            - service: switch.turn_off
-              target: !input wallbox_switch
-              continue_on_error: true
-        - if:
-            - condition: template
-              value_template: "{{ c1_sw_ent != '' and not is_state(c1_sw_ent, 'off') }}"
-          then:
-            - service: switch.turn_off
-              target: !input car_1_switch
-              continue_on_error: true
-        - if:
-            - condition: template
-              value_template: "{{ c2_sw_ent != '' and not is_state(c2_sw_ent, 'off') }}"
-          then:
-            - service: switch.turn_off
-              target: !input car_2_switch
-              continue_on_error: true
+    default:
+      - if:
+          - condition: template
+            value_template: "{{ wb_sw_ent != '' and not is_state(wb_sw_ent, 'off') }}"
+        then:
+          - service: switch.turn_off
+            target: !input wallbox_switch
+            continue_on_error: true
+      - if:
+          - condition: template
+            value_template: "{{ c1_sw_ent != '' and not is_state(c1_sw_ent, 'off') }}"
+        then:
+          - service: switch.turn_off
+            target: !input car_1_switch
+            continue_on_error: true
+      - if:
+          - condition: template
+            value_template: "{{ c2_sw_ent != '' and not is_state(c2_sw_ent, 'off') }}"
+        then:
+          - service: switch.turn_off
+            target: !input car_2_switch
+            continue_on_error: true
