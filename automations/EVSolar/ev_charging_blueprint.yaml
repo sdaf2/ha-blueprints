@@ -540,14 +540,7 @@ action:
                 sequence:
                   - variables:
                       req_manual_amps: "{{ (states(var_amp_manual) | float(16)) | int(16) }}"
-                      desired_amps: >-
-                        {% set p_raw = states(var_pv_power) | float(0) %}
-                        {% set p_w = (p_raw * 1000) if (p_raw > 0 and p_raw <= 50) else p_raw %}
-                        {% set b_soc = states(var_soc) | float(0) %}
-                        {% set energy_ok = (p_w > 100 or b_soc > 10) %}
-                        {% set lim_g = states(var_max_grid_w) | float(3500) if (var_max_grid_w is string and var_max_grid_w != '' and var_max_grid_w != 'none') else 3500 %}
-                        {% set max_g = (lim_g / 230) | int(15) %}
-                        {{ req_manual_amps if energy_ok else [req_manual_amps, max_g] | min }}
+                      desired_amps: "{{ [ [req_manual_amps, 6] | max, 32 ] | min | int }}"
                       safe_wb_manual: "{{ [ [desired_amps | int, 6] | max, 32 ] | min | int }}"
                       safe_c1_manual: "{{ [ [desired_amps | int, 6] | max, 32 ] | min | int }}"
 
@@ -614,14 +607,7 @@ action:
                         sequence:
                           - variables:
                               req_noct_amps: "{{ (states(var_amp_nocturna) | float(16)) | int(16) }}"
-                              desired_amps: >-
-                                {% set p_raw = states(var_pv_power) | float(0) %}
-                                {% set p_w = (p_raw * 1000) if (p_raw > 0 and p_raw <= 50) else p_raw %}
-                                {% set b_soc = states(var_soc) | float(0) %}
-                                {% set energy_ok = (p_w > 100 or b_soc > 10) %}
-                                {% set lim_g = states(var_max_grid_w) | float(3500) if (var_max_grid_w is string and var_max_grid_w != '' and var_max_grid_w != 'none') else 3500 %}
-                                {% set max_g = (lim_g / 230) | int(15) %}
-                                {{ req_noct_amps if energy_ok else [req_noct_amps, max_g] | min }}
+                              desired_amps: "{{ [ [req_noct_amps, 6] | max, 32 ] | min | int }}"
                               safe_wb_noct: "{{ [ [desired_amps | int, 6] | max, 32 ] | min | int }}"
                               safe_c1_noct: "{{ [ [desired_amps | int, 6] | max, 32 ] | min | int }}"
 
