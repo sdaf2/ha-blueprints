@@ -371,85 +371,85 @@ action:
         {% endif %}
 
       c1_sw_ent: >-
-        {% if var_c1_sw is mapping and 'entity_id' in var_c1_sw %}
+        {%- if var_c1_sw is mapping and 'entity_id' in var_c1_sw -%}
           {{ var_c1_sw.entity_id[0] if var_c1_sw.entity_id is list else var_c1_sw.entity_id }}
-        {% elif var_c1_sw is string and var_c1_sw != '{}' and var_c1_sw != 'none' %}
-          {{ var_c1_sw }}
-        {% else %}
+        {%- elif var_c1_sw is string and var_c1_sw != '{}' and var_c1_sw != 'none' -%}
+          {{ var_c1_sw | trim }}
+        {%- else -%}
           
-        {% endif %}
+        {%- endif -%}
       c1_num_ent: >-
-        {% if var_c1_num is mapping and 'entity_id' in var_c1_num %}
+        {%- if var_c1_num is mapping and 'entity_id' in var_c1_num -%}
           {{ var_c1_num.entity_id[0] if var_c1_num.entity_id is list else var_c1_num.entity_id }}
-        {% elif var_c1_num is string and var_c1_num != '{}' and var_c1_num != 'none' %}
-          {{ var_c1_num }}
-        {% else %}
+        {%- elif var_c1_num is string and var_c1_num != '{}' and var_c1_num != 'none' -%}
+          {{ var_c1_num | trim }}
+        {%- else -%}
           
-        {% endif %}
+        {%- endif -%}
       c2_sw_ent: >-
-        {% if var_c2_sw is mapping and 'entity_id' in var_c2_sw %}
+        {%- if var_c2_sw is mapping and 'entity_id' in var_c2_sw -%}
           {{ var_c2_sw.entity_id[0] if var_c2_sw.entity_id is list else var_c2_sw.entity_id }}
-        {% elif var_c2_sw is string and var_c2_sw != '{}' and var_c2_sw != 'none' %}
-          {{ var_c2_sw }}
-        {% else %}
+        {%- elif var_c2_sw is string and var_c2_sw != '{}' and var_c2_sw != 'none' -%}
+          {{ var_c2_sw | trim }}
+        {%- else -%}
           
-        {% endif %}
+        {%- endif -%}
       c2_num_ent: >-
-        {% if var_c2_num is mapping and 'entity_id' in var_c2_num %}
+        {%- if var_c2_num is mapping and 'entity_id' in var_c2_num -%}
           {{ var_c2_num.entity_id[0] if var_c2_num.entity_id is list else var_c2_num.entity_id }}
-        {% elif var_c2_num is string and var_c2_num != '{}' and var_c2_num != 'none' %}
-          {{ var_c2_num }}
-        {% else %}
+        {%- elif var_c2_num is string and var_c2_num != '{}' and var_c2_num != 'none' -%}
+          {{ var_c2_num | trim }}
+        {%- else -%}
           
-        {% endif %}
+        {%- endif -%}
       wb_sw_ent: >-
-        {% if var_wb_sw is mapping and 'entity_id' in var_wb_sw %}
+        {%- if var_wb_sw is mapping and 'entity_id' in var_wb_sw -%}
           {{ var_wb_sw.entity_id[0] if var_wb_sw.entity_id is list else var_wb_sw.entity_id }}
-        {% elif var_wb_sw is string and var_wb_sw != '{}' and var_wb_sw != 'none' %}
-          {{ var_wb_sw }}
-        {% else %}
+        {%- elif var_wb_sw is string and var_wb_sw != '{}' and var_wb_sw != 'none' -%}
+          {{ var_wb_sw | trim }}
+        {%- else -%}
           
-        {% endif %}
+        {%- endif -%}
       wb_cc_ent: >-
-        {% if var_wb_cc is mapping and 'entity_id' in var_wb_cc %}
+        {%- if var_wb_cc is mapping and 'entity_id' in var_wb_cc -%}
           {{ var_wb_cc.entity_id[0] if var_wb_cc.entity_id is list else var_wb_cc.entity_id }}
-        {% elif var_wb_cc is string and var_wb_cc != '{}' and var_wb_cc != 'none' %}
-          {{ var_wb_cc }}
-        {% else %}
+        {%- elif var_wb_cc is string and var_wb_cc != '{}' and var_wb_cc != 'none' -%}
+          {{ var_wb_cc | trim }}
+        {%- else -%}
           
-        {% endif %}
+        {%- endif -%}
       wb_num_ent: >-
-        {% if var_wb_num is mapping and 'entity_id' in var_wb_num %}
+        {%- if var_wb_num is mapping and 'entity_id' in var_wb_num -%}
           {{ var_wb_num.entity_id[0] if var_wb_num.entity_id is list else var_wb_num.entity_id }}
-        {% elif var_wb_num is string and var_wb_num != '{}' and var_wb_num != 'none' %}
-          {{ var_wb_num }}
-        {% else %}
+        {%- elif var_wb_num is string and var_wb_num != '{}' and var_wb_num != 'none' -%}
+          {{ var_wb_num | trim }}
+        {%- else -%}
           
-        {% endif %}
+        {%- endif -%}
       amp_manual_ent: >-
-        {% if var_amp_manual is mapping and 'entity_id' in var_amp_manual %}
+        {%- if var_amp_manual is mapping and 'entity_id' in var_amp_manual -%}
           {{ var_amp_manual.entity_id[0] if var_amp_manual.entity_id is list else var_amp_manual.entity_id }}
-        {% elif var_amp_manual is string and var_amp_manual != '{}' and var_amp_manual != 'none' and var_amp_manual != '' %}
-          {{ var_amp_manual }}
-        {% else %}
+        {%- elif var_amp_manual is string and var_amp_manual != '{}' and var_amp_manual != 'none' and var_amp_manual != '' -%}
+          {{ var_amp_manual | trim }}
+        {%- else -%}
           
-        {% endif %}
+        {%- endif -%}
       amp_noct_ent: >-
-        {% if var_amp_nocturna is mapping and 'entity_id' in var_amp_nocturna %}
+        {%- if var_amp_nocturna is mapping and 'entity_id' in var_amp_nocturna -%}
           {{ var_amp_nocturna.entity_id[0] if var_amp_nocturna.entity_id is list else var_amp_nocturna.entity_id }}
-        {% elif var_amp_nocturna is string and var_amp_nocturna != '{}' and var_amp_nocturna != 'none' and var_amp_nocturna != '' %}
-          {{ var_amp_nocturna }}
-        {% else %}
+        {%- elif var_amp_nocturna is string and var_amp_nocturna != '{}' and var_amp_nocturna != 'none' and var_amp_nocturna != '' -%}
+          {{ var_amp_nocturna | trim }}
+        {%- else -%}
           
-        {% endif %}
+        {%- endif -%}
       amp_delay_ent: >-
-        {% if var_amp_delay_s is mapping and 'entity_id' in var_amp_delay_s %}
+        {%- if var_amp_delay_s is mapping and 'entity_id' in var_amp_delay_s -%}
           {{ var_amp_delay_s.entity_id[0] if var_amp_delay_s.entity_id is list else var_amp_delay_s.entity_id }}
-        {% elif var_amp_delay_s is string and var_amp_delay_s != '{}' and var_amp_delay_s != 'none' and var_amp_delay_s != '' %}
-          {{ var_amp_delay_s }}
-        {% else %}
+        {%- elif var_amp_delay_s is string and var_amp_delay_s != '{}' and var_amp_delay_s != 'none' and var_amp_delay_s != '' -%}
+          {{ var_amp_delay_s | trim }}
+        {%- else -%}
           
-        {% endif %}
+        {%- endif -%}
 
   # =================================================================
   # PASO 2: LECTURAS DE POTENCIA
@@ -515,11 +515,8 @@ action:
       min_charge_sec: "{{ (states(var_min_charge_m) | float(5)) * 60 if (var_min_charge_m is string and var_min_charge_m != '' and var_min_charge_m != 'none') else 300 }}"
       stop_delay_sec: "{{ (states(var_stop_delay_m) | float(3)) * 60 if (var_stop_delay_m is string and var_stop_delay_m != '' and var_stop_delay_m != 'none') else 180 }}"
       amp_delay_sec: >-
-        {% if amp_delay_ent != '' %}
-          {{ states(amp_delay_ent) | float(60) }}
-        {% else %}
-          60
-        {% endif %}
+        {%- set raw_d = states(amp_delay_ent) | float(5) if (amp_delay_ent != '' and states(amp_delay_ent) not in ['unknown', 'unavailable', 'none']) else 5 -%}
+        {{ (raw_d * 60) if raw_d <= 10 else raw_d }}
 
       soc_ok: >-
         {% if is_currently_charging %}
