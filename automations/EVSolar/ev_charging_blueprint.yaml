@@ -337,15 +337,13 @@ action:
       is_c2_connected: >-
         {{ (c2_val in ['on', 'true', 'conectado', 'connected', 'charging', 'cargando', 'pluggedin', 'plugged_in', 'online', '1', 'off', 'false']) and (c2_val not in ['unavailable', 'unknown', 'disconnected', 'desconectado', 'unplugged', 'none']) }}
 
-      # Si no hay sensor de cable de Wallbox asignado (var_wb_cable: {}), el Wallbox se considera conectado si hay Wallbox configurado o si el coche está conectado
       is_wb_connected: >-
-        {% if var_wb_cable is string and var_wb_cable != '' and var_wb_cable != 'none' and var_wb_cable != {} %}
+        {% if var_wb_cable is string and var_wb_cable != '' and var_wb_cable != 'none' and var_wb_cable != '{}' %}
           {{ wb_val in ['on', 'true', 'conectado', 'connected', 'preparing', 'charging', 'suspendedev', 'suspendedevse', 'occupied', 'finishing', '1', 'plugged_in', 'cargando'] }}
         {% else %}
           true
         {% endif %}
 
-      # ¿Está el vehículo activamente necesitado de carga? (False solo si ya completó la carga al 100%)
       is_c1_active: >-
         {{ is_c1_connected and (c1_st_val not in ['complete', 'completed', 'completo', 'full', '100%', '100']) }}
       is_c2_active: >-
@@ -353,8 +351,7 @@ action:
 
       any_cable_connected: "{{ is_wb_connected or is_c1_connected or is_c2_connected }}"
       has_known_car_connected: "{{ is_c1_connected or is_c2_connected }}"
-      
-      # Número de coches ACTIVOS cargando (si está conectado por Wallbox sin coche individual, cuenta como 1)
+
       active_cars_count: "{{ (1 if is_c1_active else 0) + (1 if is_c2_active else 0) }}"
       num_active_cars: "{{ active_cars_count if active_cars_count > 0 else (1 if is_wb_connected else 0) }}"
 
@@ -373,19 +370,65 @@ action:
           {{ raw_modo_str }}
         {% endif %}
 
-      c1_sw_ent: "{{ var_c1_sw.entity_id[0] if var_c1_sw.entity_id is defined and var_c1_sw.entity_id is list else (var_c1_sw.entity_id if var_c1_sw.entity_id is defined else (var_c1_sw if var_c1_sw != {} else '')) }}"
-      c1_num_ent: "{{ var_c1_num.entity_id[0] if var_c1_num.entity_id is defined and var_c1_num.entity_id is list else (var_c1_num.entity_id if var_c1_num.entity_id is defined else (var_c1_num if var_c1_num != {} else '')) }}"
-      
-      c2_sw_ent: "{{ var_c2_sw.entity_id[0] if var_c2_sw.entity_id is defined and var_c2_sw.entity_id is list else (var_c2_sw.entity_id if var_c2_sw.entity_id is defined else (var_c2_sw if var_c2_sw != {} else '')) }}"
-      c2_num_ent: "{{ var_c2_num.entity_id[0] if var_c2_num.entity_id is defined and var_c2_num.entity_id is list else (var_c2_num.entity_id if var_c2_num.entity_id is defined else (var_c2_num if var_c2_num != {} else '')) }}"
-
-      wb_sw_ent: "{{ var_wb_sw.entity_id[0] if var_wb_sw.entity_id is defined and var_wb_sw.entity_id is list else (var_wb_sw.entity_id if var_wb_sw.entity_id is defined else (var_wb_sw if var_wb_sw != {} else '')) }}"
-      wb_cc_ent: "{{ var_wb_cc.entity_id[0] if var_wb_cc.entity_id is defined and var_wb_cc.entity_id is list else (var_wb_cc.entity_id if var_wb_cc.entity_id is defined else (var_wb_cc if var_wb_cc != {} else '')) }}"
-      wb_num_ent: "{{ var_wb_num.entity_id[0] if var_wb_num.entity_id is defined and var_wb_num.entity_id is list else (var_wb_num.entity_id if var_wb_num.entity_id is defined else (var_wb_num if var_wb_num != {} else '')) }}"
-
+      c1_sw_ent: >-
+        {% if var_c1_sw is mapping and 'entity_id' in var_c1_sw %}
+          {{ var_c1_sw.entity_id[0] if var_c1_sw.entity_id is list else var_c1_sw.entity_id }}
+        {% elif var_c1_sw is string and var_c1_sw != '{}' and var_c1_sw != 'none' %}
+          {{ var_c1_sw }}
+        {% else %}
+          
+        {% endif %}
+      c1_num_ent: >-
+        {% if var_c1_num is mapping and 'entity_id' in var_c1_num %}
+          {{ var_c1_num.entity_id[0] if var_c1_num.entity_id is list else var_c1_num.entity_id }}
+        {% elif var_c1_num is string and var_c1_num != '{}' and var_c1_num != 'none' %}
+          {{ var_c1_num }}
+        {% else %}
+          
+        {% endif %}
+      c2_sw_ent: >-
+        {% if var_c2_sw is mapping and 'entity_id' in var_c2_sw %}
+          {{ var_c2_sw.entity_id[0] if var_c2_sw.entity_id is list else var_c2_sw.entity_id }}
+        {% elif var_c2_sw is string and var_c2_sw != '{}' and var_c2_sw != 'none' %}
+          {{ var_c2_sw }}
+        {% else %}
+          
+        {% endif %}
+      c2_num_ent: >-
+        {% if var_c2_num is mapping and 'entity_id' in var_c2_num %}
+          {{ var_c2_num.entity_id[0] if var_c2_num.entity_id is list else var_c2_num.entity_id }}
+        {% elif var_c2_num is string and var_c2_num != '{}' and var_c2_num != 'none' %}
+          {{ var_c2_num }}
+        {% else %}
+          
+        {% endif %}
+      wb_sw_ent: >-
+        {% if var_wb_sw is mapping and 'entity_id' in var_wb_sw %}
+          {{ var_wb_sw.entity_id[0] if var_wb_sw.entity_id is list else var_wb_sw.entity_id }}
+        {% elif var_wb_sw is string and var_wb_sw != '{}' and var_wb_sw != 'none' %}
+          {{ var_wb_sw }}
+        {% else %}
+          
+        {% endif %}
+      wb_cc_ent: >-
+        {% if var_wb_cc is mapping and 'entity_id' in var_wb_cc %}
+          {{ var_wb_cc.entity_id[0] if var_wb_cc.entity_id is list else var_wb_cc.entity_id }}
+        {% elif var_wb_cc is string and var_wb_cc != '{}' and var_wb_cc != 'none' %}
+          {{ var_wb_cc }}
+        {% else %}
+          
+        {% endif %}
+      wb_num_ent: >-
+        {% if var_wb_num is mapping and 'entity_id' in var_wb_num %}
+          {{ var_wb_num.entity_id[0] if var_wb_num.entity_id is list else var_wb_num.entity_id }}
+        {% elif var_wb_num is string and var_wb_num != '{}' and var_wb_num != 'none' %}
+          {{ var_wb_num }}
+        {% else %}
+          
+        {% endif %}
 
   # =================================================================
-  # PASO 2: LECTURAS DE POTENCIA (las entidades ya existen del PASO 1)
+  # PASO 2: LECTURAS DE POTENCIA
   # =================================================================
   - variables:
       raw_pv: "{{ states(var_pv_power) | float(0) }}"
@@ -394,7 +437,8 @@ action:
       current_soc: "{{ states(var_soc) | float(0) }}"
       min_soc_req: "{{ states(var_min_soc) | float(80) }}"
       target_hysteresis_soc: "{{ [ (min_soc_req + 10.0), 100.0 ] | min }}"
-      is_currently_charging: "{{ is_state(wb_sw_ent, 'on') or (var_c1_sw != {} and is_state(c1_sw_ent, 'on')) or (var_c2_sw != {} and is_state(c2_sw_ent, 'on')) }}"
+      is_currently_charging: >-
+        {{ (wb_sw_ent != '' and is_state(wb_sw_ent, 'on')) or (c1_sw_ent != '' and is_state(c1_sw_ent, 'on')) or (c2_sw_ent != '' and is_state(c2_sw_ent, 'on')) }}
 
       has_energy_support: "{{ pv_w > 100 or current_soc > 10 }}"
       
@@ -412,14 +456,13 @@ action:
       grid_import_w: "{{ net_power_w if net_power_w > 0 else 0 }}"
       exported_surplus_w: "{{ (net_power_w * -1) if net_power_w < 0 else 0 }}"
 
-      c1_a_now: "{{ states(c1_num_ent) | float(0) if (var_c1_num is string and var_c1_num != '' and is_state(c1_sw_ent, 'on')) else 0 }}"
-      c2_a_now: "{{ states(c2_num_ent) | float(0) if (var_c2_num is string and var_c2_num != '' and is_state(c2_sw_ent, 'on')) else 0 }}"
-      wb_a_now: "{{ states(wb_num_ent) | float(0) if is_state(wb_sw_ent, 'on') else 0 }}"
+      c1_a_now: "{{ states(c1_num_ent) | float(0) if (c1_num_ent != '' and c1_sw_ent != '' and is_state(c1_sw_ent, 'on')) else 0 }}"
+      c2_a_now: "{{ states(c2_num_ent) | float(0) if (c2_num_ent != '' and c2_sw_ent != '' and is_state(c2_sw_ent, 'on')) else 0 }}"
+      wb_a_now: "{{ states(wb_num_ent) | float(0) if (wb_num_ent != '' and (wb_sw_ent == '' or is_state(wb_sw_ent, 'on'))) else 0 }}"
       ev_current_w: "{{ ( (c1_a_now + c2_a_now) if (c1_a_now > 0 or c2_a_now > 0) else wb_a_now ) * 230 }}"
 
-
   # =================================================================
-  # PASO 3: CALCULOS COMBINADOS Y MARGENES (ev_current_w ya existe)
+  # PASO 3: CALCULOS COMBINADOS Y MARGENES
   # =================================================================
   - variables:
       raw_bat: "{{ states(var_bat_power) | float(0) if (var_bat_power is string and var_bat_power != '' and var_bat_power != 'none') else 0 }}"
@@ -447,7 +490,9 @@ action:
 
       min_charge_sec: "{{ (states(var_min_charge_m) | float(5)) * 60 if (var_min_charge_m is string and var_min_charge_m != '' and var_min_charge_m != 'none') else 300 }}"
       stop_delay_sec: "{{ (states(var_stop_delay_m) | float(3)) * 60 if (var_stop_delay_m is string and var_stop_delay_m != '' and var_stop_delay_m != 'none') else 180 }}"
-      amp_delay_sec: "{{ ((states(var_amp_delay_s) | float(2)) * 60) if (var_amp_delay_s is string and var_amp_delay_s != '' and var_amp_delay_s != 'none') else 120 }}"
+      amp_delay_sec: >-
+        {% set raw_d = states(var_amp_delay_s) | float(60) if (var_amp_delay_s is string and var_amp_delay_s != '' and var_amp_delay_s != 'none') else 60 %}
+        {{ (raw_d * 60) if raw_d <= 10 else raw_d }}
 
       soc_ok: >-
         {% if is_currently_charging %}
@@ -475,16 +520,19 @@ action:
       raw_calculated_amps: "{{ (total_available_w / 230) | int(0) }}"
       calculated_amps: "{{ [ raw_calculated_amps, max_safe_amps ] | min }}"
       has_enough_sun: "{{ calculated_amps >= 6 }}"
-  # 2. FILTRO GENERAL DE CABLE
+
+  # =================================================================
+  # PASO 4: EJECUCIÓN SEGÚN CABLE Y MODO
+  # =================================================================
   - choose:
+      # --- FILTRO GENERAL: SI HAY CABLE O WALLBOX CONECTADO ---
       - conditions:
           - condition: template
             value_template: "{{ any_cable_connected }}"
         sequence:
-          # --- GESTIÓN DE MODOS Y EJECUCIÓN ---
           - choose:
               # -------------------------------------------------------------
-              # MODO 1: MANUAL - Arranca TODO incondicionalmente
+              # MODO 1: MANUAL
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
@@ -503,10 +551,10 @@ action:
                       safe_wb_manual: "{{ [ [desired_amps | int, 6] | max, 32 ] | min | int }}"
                       safe_c1_manual: "{{ [ [desired_amps | int, 6] | max, 32 ] | min | int }}"
 
-                  # PASO 1: Wallbox Availability ON (solo si no está ya encendido)
+                  # PASO 1: Wallbox Availability ON
                   - if:
                       - condition: template
-                        value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
+                        value_template: "{{ wb_sw_ent != '' and not is_state(wb_sw_ent, 'on') }}"
                     then:
                       - service: switch.turn_on
                         target: !input wallbox_switch
@@ -515,16 +563,36 @@ action:
                   # PASO 2: Wallbox Charge Control ON
                   - if:
                       - condition: template
-                        value_template: "{{ wb_cc_ent != '' }}"
+                        value_template: "{{ wb_cc_ent != '' and not is_state(wb_cc_ent, 'on') }}"
                     then:
                       - service: switch.turn_on
                         target: !input wallbox_charge_control_switch
                         continue_on_error: true
 
-                  # PASO 5: Tesla amperios = control de consumo
+                  # PASO 3: Tesla Switch ON
                   - if:
                       - condition: template
-                        value_template: "{{ (states(c1_num_ent) | float(0)) != (safe_c1_manual | float(0)) }}"
+                        value_template: "{{ c1_sw_ent != '' and not is_state(c1_sw_ent, 'on') }}"
+                    then:
+                      - service: switch.turn_on
+                        target: !input car_1_switch
+                        continue_on_error: true
+
+                  # PASO 4: Wallbox Amperios
+                  - if:
+                      - condition: template
+                        value_template: "{{ wb_num_ent != '' and (states(wb_num_ent) | float(0)) != (safe_wb_manual | float(0)) }}"
+                    then:
+                      - service: number.set_value
+                        target: !input wallbox_current_number
+                        data:
+                          value: "{{ safe_wb_manual | int }}"
+                        continue_on_error: true
+
+                  # PASO 5: Tesla Amperios (solo si está configurado)
+                  - if:
+                      - condition: template
+                        value_template: "{{ c1_num_ent != '' and (states(c1_num_ent) | float(0)) != (safe_c1_manual | float(0)) }}"
                     then:
                       - service: number.set_value
                         target: !input car_1_current_number
@@ -533,7 +601,7 @@ action:
                         continue_on_error: true
 
               # -------------------------------------------------------------
-              # MODO 2: NOCTURNO / FINDE - Arranca TODO incondicionalmente
+              # MODO 2: NOCTURNO / FINDE
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
@@ -557,10 +625,10 @@ action:
                               safe_wb_noct: "{{ [ [desired_amps | int, 6] | max, 32 ] | min | int }}"
                               safe_c1_noct: "{{ [ [desired_amps | int, 6] | max, 32 ] | min | int }}"
 
-                          # PASO 1: Wallbox Availability ON (solo si no está ya encendido)
+                          # PASO 1: Wallbox Availability ON
                           - if:
                               - condition: template
-                                value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
+                                value_template: "{{ wb_sw_ent != '' and not is_state(wb_sw_ent, 'on') }}"
                             then:
                               - service: switch.turn_on
                                 target: !input wallbox_switch
@@ -569,25 +637,36 @@ action:
                           # PASO 2: Wallbox Charge Control ON
                           - if:
                               - condition: template
-                                value_template: "{{ wb_cc_ent != '' }}"
+                                value_template: "{{ wb_cc_ent != '' and not is_state(wb_cc_ent, 'on') }}"
                             then:
                               - service: switch.turn_on
                                 target: !input wallbox_charge_control_switch
                                 continue_on_error: true
 
-                          # PASO 4: Tesla ON (solo si no está ya encendido y el usuario NO lo paró)
+                          # PASO 3: Tesla Switch ON
                           - if:
                               - condition: template
-                                value_template: "{{ not is_state('input_boolean.ev_tesla_parado_usuario', 'on') and not is_state(c1_sw_ent, 'on') }}"
+                                value_template: "{{ c1_sw_ent != '' and not is_state('input_boolean.ev_tesla_parado_usuario', 'on') and not is_state(c1_sw_ent, 'on') }}"
                             then:
                               - service: switch.turn_on
                                 target: !input car_1_switch
                                 continue_on_error: true
 
-                          # PASO 5: Tesla amperios = control de consumo
+                          # PASO 4: Wallbox Amperios
                           - if:
                               - condition: template
-                                value_template: "{{ (states(c1_num_ent) | float(0)) != (safe_c1_noct | float(0)) }}"
+                                value_template: "{{ wb_num_ent != '' and (states(wb_num_ent) | float(0)) != (safe_wb_noct | float(0)) }}"
+                            then:
+                              - service: number.set_value
+                                target: !input wallbox_current_number
+                                data:
+                                  value: "{{ safe_wb_noct | int }}"
+                                continue_on_error: true
+
+                          # PASO 5: Tesla Amperios (solo si está configurado)
+                          - if:
+                              - condition: template
+                                value_template: "{{ c1_num_ent != '' and (states(c1_num_ent) | float(0)) != (safe_c1_noct | float(0)) }}"
                             then:
                               - service: number.set_value
                                 target: !input car_1_current_number
@@ -596,19 +675,23 @@ action:
                                 continue_on_error: true
 
                     default:
-                      - service: switch.turn_off
-                        target: !input car_1_switch
-                        continue_on_error: true
                       - if:
                           - condition: template
-                            value_template: "{{ wb_cc_ent != '' }}"
+                            value_template: "{{ c1_sw_ent != '' and not is_state(c1_sw_ent, 'off') }}"
+                        then:
+                          - service: switch.turn_off
+                            target: !input car_1_switch
+                            continue_on_error: true
+                      - if:
+                          - condition: template
+                            value_template: "{{ wb_cc_ent != '' and not is_state(wb_cc_ent, 'off') }}"
                         then:
                           - service: switch.turn_off
                             target: !input wallbox_charge_control_switch
                             continue_on_error: true
 
               # -------------------------------------------------------------
-              # MODO 3: SOLAR (EXCEDENTES + APOYO BATERÍA + PROTECCIÓN DINÁMICA)
+              # MODO 3: SOLAR
               # -------------------------------------------------------------
               - conditions:
                   - condition: template
@@ -649,6 +732,7 @@ action:
                         {% endif %}
 
                   - choose:
+                      # --- HAY SOL Y NO HAY BLOQUEO PRIORITARIO ---
                       - conditions:
                           - condition: template
                             value_template: "{{ not has_priority_block }}"
@@ -657,115 +741,60 @@ action:
                           - condition: template
                             value_template: "{{ num_active_cars > 0 }}"
                         sequence:
-                          - choose:
-                              - conditions:
-                                  - condition: template
-                                    value_template: "{{ has_known_car_connected }}"
-                                sequence:
-                                  - if:
-                                      - condition: template
-                                        value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
-                                    then:
-                                      - service: switch.turn_on
-                                        target: !input wallbox_switch
-                                        continue_on_error: true
-                                  - if:
-                                      - condition: template
-                                        value_template: "{{ is_c1_connected and is_c1_active and var_c1_num != {} and (amps_c1 | float(0)) >= 6 }}"
-                                    then:
-                                      - variables:
-                                          raw_target_c1: "{{ [amps_c1 | float(6), 6] | max }}"
-                                          curr_c1_a: "{{ states(c1_num_ent) | float(0) }}"
-                                          
-                                          c1_obj: "{{ states[c1_num_ent] }}"
-                                          c1_sec_since_change: "{{ (now() - c1_obj.last_changed).total_seconds() if (c1_obj is defined and c1_obj.last_changed is defined) else 9999 }}"
-                                          
-                                          is_overpower_emergency_c1: "{{ max_safe_amps < curr_c1_a }}"
-                                          
-                                          target_c1: >-
-                                            {% if (c1_sec_since_change < amp_delay_sec) and (not is_overpower_emergency_c1) and (curr_c1_a >= 6) %}
-                                              {{ curr_c1_a }}
-                                            {% else %}
-                                              {{ raw_target_c1 }}
-                                            {% endif %}
+                          # 1. Encender disponibilidad del Wallbox
+                          - if:
+                              - condition: template
+                                value_template: "{{ wb_sw_ent != '' and not is_state(wb_sw_ent, 'on') }}"
+                            then:
+                              - service: switch.turn_on
+                                target: !input wallbox_switch
+                                continue_on_error: true
 
-                                          safe_c1_amps: "{{ [ (target_c1 | float(6)), 32 ] | min | int }}"
-                                      - if:
-                                          - condition: template
-                                            value_template: "{{ not is_state(c1_sw_ent, 'on') }}"
-                                        then:
-                                          - service: switch.turn_on
-                                            target: !input car_1_switch
-                                            continue_on_error: true
-                                      - if:
-                                          - condition: template
-                                            value_template: "{{ (states(c1_num_ent) | float(0)) != (safe_c1_amps | float(0)) }}"
-                                        then:
-                                          - service: number.set_value
-                                            target: !input car_1_current_number
-                                            data:
-                                              value: "{{ safe_c1_amps | int }}"
-                                            continue_on_error: true
-                                  - if:
-                                      - condition: template
-                                        value_template: "{{ is_c2_connected and is_c2_active and var_c2_num != {} and (amps_c2 | float(0)) >= 6 }}"
-                                    then:
-                                      - variables:
-                                          raw_target_c2: "{{ [amps_c2 | float(6), 6] | max }}"
-                                          curr_c2_a: "{{ states(c2_num_ent) | float(0) }}"
-                                          c2_obj: "{{ states[c2_num_ent] }}"
-                                          c2_sec_since_change: "{{ (now() - c2_obj.last_changed).total_seconds() if (c2_obj is defined and c2_obj.last_changed is defined) else 9999 }}"
-                                          
-                                          is_overpower_emergency_c2: "{{ max_safe_amps < curr_c2_a }}"
-                                          
-                                          target_c2: >-
-                                            {% if (c2_sec_since_change < amp_delay_sec) and (not is_overpower_emergency_c2) and (curr_c2_a >= 6) %}
-                                              {{ curr_c2_a }}
-                                            {% else %}
-                                              {{ raw_target_c2 }}
-                                            {% endif %}
+                          # 2. Encender control de carga del Wallbox
+                          - if:
+                              - condition: template
+                                value_template: "{{ wb_cc_ent != '' and not is_state(wb_cc_ent, 'on') }}"
+                            then:
+                              - service: switch.turn_on
+                                target: !input wallbox_charge_control_switch
+                                continue_on_error: true
 
-                                          safe_c2_amps: "{{ [ (target_c2 | float(6)), 32 ] | min | int }}"
-                                      - if:
-                                          - condition: template
-                                            value_template: "{{ not is_state(c2_sw_ent, 'on') }}"
-                                        then:
-                                          - service: switch.turn_on
-                                            target: !input car_2_switch
-                                            continue_on_error: true
-                                      - if:
-                                          - condition: template
-                                            value_template: "{{ (states(c2_num_ent) | float(0)) != (safe_c2_amps | float(0)) }}"
-                                        then:
-                                          - service: number.set_value
-                                            target: !input car_2_current_number
-                                            data:
-                                              value: "{{ safe_c2_amps }}"
-                                            continue_on_error: true
+                          # 3. Encender switch Coche 1 si está activo
+                          - if:
+                              - condition: template
+                                value_template: "{{ c1_sw_ent != '' and is_c1_connected and is_c1_active and not is_state(c1_sw_ent, 'on') }}"
+                            then:
+                              - service: switch.turn_on
+                                target: !input car_1_switch
+                                continue_on_error: true
 
-                            default:
-                              - if:
-                                  - condition: template
-                                    value_template: "{{ not is_state(wb_sw_ent, 'on') }}"
-                                then:
-                                  - service: switch.turn_on
-                                    target: !input wallbox_switch
-                                    continue_on_error: true
+                          # 4. Encender switch Coche 2 si está activo
+                          - if:
+                              - condition: template
+                                value_template: "{{ c2_sw_ent != '' and is_c2_connected and is_c2_active and not is_state(c2_sw_ent, 'on') }}"
+                            then:
+                              - service: switch.turn_on
+                                target: !input car_2_switch
+                                continue_on_error: true
+
+                          # 5. Ajustar Amperaje del Wallbox (con filtro de estabilización)
+                          - if:
+                              - condition: template
+                                value_template: "{{ wb_num_ent != '' }}"
+                            then:
                               - variables:
                                   raw_target_wb: "{{ [calculated_amps, 6] | max }}"
                                   curr_wb_a: "{{ states(wb_num_ent) | float(0) }}"
-                                  wb_obj: "{{ states[wb_num_ent] }}"
-                                  wb_sec_since_change: "{{ (now() - wb_obj.last_changed).total_seconds() if (wb_obj is defined and wb_obj.last_changed is defined) else 9999 }}"
-                                  
+                                  wb_objs: "{{ expand(wb_num_ent) }}"
+                                  wb_last: "{{ wb_objs[0].last_changed if (wb_objs | length > 0 and wb_objs[0].last_changed is defined) else none }}"
+                                  wb_sec_since_change: "{{ (now() - wb_last).total_seconds() if wb_last is not none else 9999 }}"
                                   is_overpower_emergency_wb: "{{ max_safe_amps < curr_wb_a }}"
-                                  
                                   target_wb: >-
                                     {% if (wb_sec_since_change < amp_delay_sec) and (not is_overpower_emergency_wb) and (curr_wb_a >= 6) %}
                                       {{ curr_wb_a }}
                                     {% else %}
                                       {{ raw_target_wb }}
                                     {% endif %}
-
                                   safe_wb_amps: >-
                                     {% set m_attr = state_attr(wb_num_ent, 'max') %}
                                     {% set m_lim = (m_attr | float(32)) if (m_attr is not none) else 32 %}
@@ -780,44 +809,113 @@ action:
                                       value: "{{ safe_wb_amps }}"
                                     continue_on_error: true
 
-                    default:
-                      - variables:
-                          c1_sw_obj: "{{ states[c1_sw_ent] if (c1_sw_ent is string and c1_sw_ent != '' and c1_sw_ent != 'none' and c1_sw_ent != '{}') else none }}"
-                          wb_sw_obj: "{{ states[wb_sw_ent] if (wb_sw_ent is string and wb_sw_ent != '' and wb_sw_ent != 'none' and wb_sw_ent != '{}') else none }}"
-                          
-                          c1_charge_sec: "{{ (now() - c1_sw_obj.last_changed).total_seconds() if (c1_sw_obj is not none and c1_sw_obj.last_changed is defined and is_state(c1_sw_ent, 'on')) else 9999 }}"
-                          wb_charge_sec: "{{ (now() - wb_sw_obj.last_changed).total_seconds() if (wb_sw_obj is not none and wb_sw_obj.last_changed is defined and is_state(wb_sw_ent, 'on')) else 9999 }}"
-                          
-                          can_stop_c1: "{{ c1_charge_sec >= stop_delay_sec }}"
-                          can_stop_wb: "{{ wb_charge_sec >= stop_delay_sec }}"
-
-                      - choose:
-                          - conditions:
+                          # 6. Ajustar Amperaje del Coche 1 (si tiene entidad de amperaje individual)
+                          - if:
                               - condition: template
-                                value_template: "{{ not can_stop_c1 or not can_stop_wb }}"
-                            sequence:
+                                value_template: "{{ c1_num_ent != '' and is_c1_connected and is_c1_active and (amps_c1 | float(0)) >= 6 }}"
+                            then:
+                              - variables:
+                                  raw_target_c1: "{{ [amps_c1 | float(6), 6] | max }}"
+                                  curr_c1_a: "{{ states(c1_num_ent) | float(0) }}"
+                                  c1_objs: "{{ expand(c1_num_ent) }}"
+                                  c1_last: "{{ c1_objs[0].last_changed if (c1_objs | length > 0 and c1_objs[0].last_changed is defined) else none }}"
+                                  c1_sec_since_change: "{{ (now() - c1_last).total_seconds() if c1_last is not none else 9999 }}"
+                                  is_overpower_emergency_c1: "{{ max_safe_amps < curr_c1_a }}"
+                                  target_c1: >-
+                                    {% if (c1_sec_since_change < amp_delay_sec) and (not is_overpower_emergency_c1) and (curr_c1_a >= 6) %}
+                                      {{ curr_c1_a }}
+                                    {% else %}
+                                      {{ raw_target_c1 }}
+                                    {% endif %}
+                                  safe_c1_amps: "{{ [ (target_c1 | float(6)), 32 ] | min | int }}"
                               - if:
                                   - condition: template
-                                    value_template: "{{ is_c1_connected and is_c1_active and var_c1_num != {} }}"
+                                    value_template: "{{ (states(c1_num_ent) | float(0)) != (safe_c1_amps | float(0)) }}"
                                 then:
                                   - service: number.set_value
                                     target: !input car_1_current_number
-                                    data: { value: 6 }
+                                    data:
+                                      value: "{{ safe_c1_amps }}"
                                     continue_on_error: true
 
-                        default:
+                          # 7. Ajustar Amperaje del Coche 2 (si tiene entidad de amperaje individual)
                           - if:
                               - condition: template
-                                value_template: "{{ not is_state(wb_sw_ent, 'off') }}"
+                                value_template: "{{ c2_num_ent != '' and is_c2_connected and is_c2_active and (amps_c2 | float(0)) >= 6 }}"
                             then:
-                              - service: switch.turn_off
-                                target: !input wallbox_switch
-                          - if:
-                              - condition: template
-                                value_template: "{{ var_c1_sw != {} and not is_state(c1_sw_ent, 'off') }}"
-                            then:
-                              - service: switch.turn_off
-                                target: !input car_1_switch
+                              - variables:
+                                  raw_target_c2: "{{ [amps_c2 | float(6), 6] | max }}"
+                                  curr_c2_a: "{{ states(c2_num_ent) | float(0) }}"
+                                  c2_objs: "{{ expand(c2_num_ent) }}"
+                                  c2_last: "{{ c2_objs[0].last_changed if (c2_objs | length > 0 and c2_objs[0].last_changed is defined) else none }}"
+                                  c2_sec_since_change: "{{ (now() - c2_last).total_seconds() if c2_last is not none else 9999 }}"
+                                  is_overpower_emergency_c2: "{{ max_safe_amps < curr_c2_a }}"
+                                  target_c2: >-
+                                    {% if (c2_sec_since_change < amp_delay_sec) and (not is_overpower_emergency_c2) and (curr_c2_a >= 6) %}
+                                      {{ curr_c2_a }}
+                                    {% else %}
+                                      {{ raw_target_c2 }}
+                                    {% endif %}
+                                  safe_c2_amps: "{{ [ (target_c2 | float(6)), 32 ] | min | int }}"
+                              - if:
+                                  - condition: template
+                                    value_template: "{{ (states(c2_num_ent) | float(0)) != (safe_c2_amps | float(0)) }}"
+                                then:
+                                  - service: number.set_value
+                                    target: !input car_2_current_number
+                                    data:
+                                      value: "{{ safe_c2_amps }}"
+                                    continue_on_error: true
+
+                      # --- NO HAY SOL / BLOQUEO PRIORITARIO (PAUSA / APAGADO SOLAR) ---
+                      default:
+                        - variables:
+                            c1_sw_objs: "{{ expand(c1_sw_ent) if c1_sw_ent != '' else [] }}"
+                            wb_sw_objs: "{{ expand(wb_sw_ent) if wb_sw_ent != '' else [] }}"
+                            c1_last_chg: "{{ c1_sw_objs[0].last_changed if (c1_sw_objs | length > 0 and c1_sw_objs[0].last_changed is defined) else none }}"
+                            wb_last_chg: "{{ wb_sw_objs[0].last_changed if (wb_sw_objs | length > 0 and wb_sw_objs[0].last_changed is defined) else none }}"
+                            c1_charge_sec: "{{ (now() - c1_last_chg).total_seconds() if (c1_last_chg is not none and is_state(c1_sw_ent, 'on')) else 9999 }}"
+                            wb_charge_sec: "{{ (now() - wb_last_chg).total_seconds() if (wb_last_chg is not none and is_state(wb_sw_ent, 'on')) else 9999 }}"
+                            can_stop_c1: "{{ c1_charge_sec >= stop_delay_sec }}"
+                            can_stop_wb: "{{ wb_charge_sec >= stop_delay_sec }}"
+
+                        - choose:
+                            - conditions:
+                                - condition: template
+                                  value_template: "{{ not can_stop_c1 or not can_stop_wb }}"
+                              sequence:
+                                - if:
+                                    - condition: template
+                                      value_template: "{{ c1_num_ent != '' and is_c1_connected and is_c1_active }}"
+                                  then:
+                                    - service: number.set_value
+                                      target: !input car_1_current_number
+                                      data: { value: 6 }
+                                      continue_on_error: true
+                                - if:
+                                    - condition: template
+                                      value_template: "{{ wb_num_ent != '' }}"
+                                  then:
+                                    - service: number.set_value
+                                      target: !input wallbox_current_number
+                                      data: { value: 6 }
+                                      continue_on_error: true
+
+                          default:
+                            - if:
+                                - condition: template
+                                  value_template: "{{ wb_sw_ent != '' and not is_state(wb_sw_ent, 'off') }}"
+                              then:
+                                - service: switch.turn_off
+                                  target: !input wallbox_switch
+                                  continue_on_error: true
+                            - if:
+                                - condition: template
+                                  value_template: "{{ c1_sw_ent != '' and not is_state(c1_sw_ent, 'off') }}"
+                              then:
+                                - service: switch.turn_off
+                                  target: !input car_1_switch
+                                  continue_on_error: true
 
               # -------------------------------------------------------------
               # MODO 4: APAGADO
@@ -828,48 +926,55 @@ action:
                 sequence:
                   - if:
                       - condition: template
-                        value_template: "{{ not is_state(wb_sw_ent, 'off') }}"
+                        value_template: "{{ wb_sw_ent != '' and not is_state(wb_sw_ent, 'off') }}"
                     then:
                       - service: switch.turn_off
                         target: !input wallbox_switch
+                        continue_on_error: true
                   - if:
                       - condition: template
-                        value_template: "{{ var_c1_sw != {} and not is_state(c1_sw_ent, 'off') }}"
+                        value_template: "{{ c1_sw_ent != '' and not is_state(c1_sw_ent, 'off') }}"
                     then:
                       - service: switch.turn_off
                         target: !input car_1_switch
+                        continue_on_error: true
 
             default:
               - if:
                   - condition: template
-                    value_template: "{{ not is_state(wb_sw_ent, 'off') }}"
+                    value_template: "{{ wb_sw_ent != '' and not is_state(wb_sw_ent, 'off') }}"
                 then:
                   - service: switch.turn_off
                     target: !input wallbox_switch
+                    continue_on_error: true
               - if:
                   - condition: template
-                    value_template: "{{ var_c1_sw != {} and not is_state(c1_sw_ent, 'off') }}"
+                    value_template: "{{ c1_sw_ent != '' and not is_state(c1_sw_ent, 'off') }}"
                 then:
                   - service: switch.turn_off
                     target: !input car_1_switch
+                    continue_on_error: true
 
-    # SI NO HAY NINGÚN CABLE CONECTADO: Apagar todo
-    default:
-      - if:
-          - condition: template
-            value_template: "{{ not is_state(wb_sw_ent, 'off') }}"
-        then:
-          - service: switch.turn_off
-            target: !input wallbox_switch
-      - if:
-          - condition: template
-            value_template: "{{ var_c1_sw != {} and not is_state(c1_sw_ent, 'off') }}"
-        then:
-          - service: switch.turn_off
-            target: !input car_1_switch
-      - if:
-          - condition: template
-            value_template: "{{ var_c2_sw != {} and not is_state(c2_sw_ent, 'off') }}"
-        then:
-          - service: switch.turn_off
-            target: !input car_2_switch
+      # SI NO HAY NINGÚN CABLE CONECTADO: Apagar todo
+      default:
+        - if:
+            - condition: template
+              value_template: "{{ wb_sw_ent != '' and not is_state(wb_sw_ent, 'off') }}"
+          then:
+            - service: switch.turn_off
+              target: !input wallbox_switch
+              continue_on_error: true
+        - if:
+            - condition: template
+              value_template: "{{ c1_sw_ent != '' and not is_state(c1_sw_ent, 'off') }}"
+          then:
+            - service: switch.turn_off
+              target: !input car_1_switch
+              continue_on_error: true
+        - if:
+            - condition: template
+              value_template: "{{ c2_sw_ent != '' and not is_state(c2_sw_ent, 'off') }}"
+          then:
+            - service: switch.turn_off
+              target: !input car_2_switch
+              continue_on_error: true
