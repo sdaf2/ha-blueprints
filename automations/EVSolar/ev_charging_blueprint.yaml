@@ -371,80 +371,80 @@ action:
         {% endif %}
 
       c1_sw_ent: >-
-        {%- if var_c1_sw is mapping and 'entity_id' in var_c1_sw -%}
-          {{ var_c1_sw.entity_id[0] if var_c1_sw.entity_id is list else var_c1_sw.entity_id }}
+        {%- if var_c1_sw is defined and var_c1_sw.entity_id is defined -%}
+          {{ (var_c1_sw.entity_id[0] if var_c1_sw.entity_id is list else var_c1_sw.entity_id) | trim }}
         {%- elif var_c1_sw is string and var_c1_sw != '{}' and var_c1_sw != 'none' -%}
           {{ var_c1_sw | trim }}
         {%- else -%}
           
         {%- endif -%}
       c1_num_ent: >-
-        {%- if var_c1_num is mapping and 'entity_id' in var_c1_num -%}
-          {{ var_c1_num.entity_id[0] if var_c1_num.entity_id is list else var_c1_num.entity_id }}
+        {%- if var_c1_num is defined and var_c1_num.entity_id is defined -%}
+          {{ (var_c1_num.entity_id[0] if var_c1_num.entity_id is list else var_c1_num.entity_id) | trim }}
         {%- elif var_c1_num is string and var_c1_num != '{}' and var_c1_num != 'none' -%}
           {{ var_c1_num | trim }}
         {%- else -%}
           
         {%- endif -%}
       c2_sw_ent: >-
-        {%- if var_c2_sw is mapping and 'entity_id' in var_c2_sw -%}
-          {{ var_c2_sw.entity_id[0] if var_c2_sw.entity_id is list else var_c2_sw.entity_id }}
+        {%- if var_c2_sw is defined and var_c2_sw.entity_id is defined -%}
+          {{ (var_c2_sw.entity_id[0] if var_c2_sw.entity_id is list else var_c2_sw.entity_id) | trim }}
         {%- elif var_c2_sw is string and var_c2_sw != '{}' and var_c2_sw != 'none' -%}
           {{ var_c2_sw | trim }}
         {%- else -%}
           
         {%- endif -%}
       c2_num_ent: >-
-        {%- if var_c2_num is mapping and 'entity_id' in var_c2_num -%}
-          {{ var_c2_num.entity_id[0] if var_c2_num.entity_id is list else var_c2_num.entity_id }}
+        {%- if var_c2_num is defined and var_c2_num.entity_id is defined -%}
+          {{ (var_c2_num.entity_id[0] if var_c2_num.entity_id is list else var_c2_num.entity_id) | trim }}
         {%- elif var_c2_num is string and var_c2_num != '{}' and var_c2_num != 'none' -%}
           {{ var_c2_num | trim }}
         {%- else -%}
           
         {%- endif -%}
       wb_sw_ent: >-
-        {%- if var_wb_sw is mapping and 'entity_id' in var_wb_sw -%}
-          {{ var_wb_sw.entity_id[0] if var_wb_sw.entity_id is list else var_wb_sw.entity_id }}
+        {%- if var_wb_sw is defined and var_wb_sw.entity_id is defined -%}
+          {{ (var_wb_sw.entity_id[0] if var_wb_sw.entity_id is list else var_wb_sw.entity_id) | trim }}
         {%- elif var_wb_sw is string and var_wb_sw != '{}' and var_wb_sw != 'none' -%}
           {{ var_wb_sw | trim }}
         {%- else -%}
           
         {%- endif -%}
       wb_cc_ent: >-
-        {%- if var_wb_cc is mapping and 'entity_id' in var_wb_cc -%}
-          {{ var_wb_cc.entity_id[0] if var_wb_cc.entity_id is list else var_wb_cc.entity_id }}
+        {%- if var_wb_cc is defined and var_wb_cc.entity_id is defined -%}
+          {{ (var_wb_cc.entity_id[0] if var_wb_cc.entity_id is list else var_wb_cc.entity_id) | trim }}
         {%- elif var_wb_cc is string and var_wb_cc != '{}' and var_wb_cc != 'none' -%}
           {{ var_wb_cc | trim }}
         {%- else -%}
           
         {%- endif -%}
       wb_num_ent: >-
-        {%- if var_wb_num is mapping and 'entity_id' in var_wb_num -%}
-          {{ var_wb_num.entity_id[0] if var_wb_num.entity_id is list else var_wb_num.entity_id }}
+        {%- if var_wb_num is defined and var_wb_num.entity_id is defined -%}
+          {{ (var_wb_num.entity_id[0] if var_wb_num.entity_id is list else var_wb_num.entity_id) | trim }}
         {%- elif var_wb_num is string and var_wb_num != '{}' and var_wb_num != 'none' -%}
           {{ var_wb_num | trim }}
         {%- else -%}
           
         {%- endif -%}
       amp_manual_ent: >-
-        {%- if var_amp_manual is mapping and 'entity_id' in var_amp_manual -%}
-          {{ var_amp_manual.entity_id[0] if var_amp_manual.entity_id is list else var_amp_manual.entity_id }}
+        {%- if var_amp_manual is defined and var_amp_manual.entity_id is defined -%}
+          {{ (var_amp_manual.entity_id[0] if var_amp_manual.entity_id is list else var_amp_manual.entity_id) | trim }}
         {%- elif var_amp_manual is string and var_amp_manual != '{}' and var_amp_manual != 'none' and var_amp_manual != '' -%}
           {{ var_amp_manual | trim }}
         {%- else -%}
           
         {%- endif -%}
       amp_noct_ent: >-
-        {%- if var_amp_nocturna is mapping and 'entity_id' in var_amp_nocturna -%}
-          {{ var_amp_nocturna.entity_id[0] if var_amp_nocturna.entity_id is list else var_amp_nocturna.entity_id }}
+        {%- if var_amp_nocturna is defined and var_amp_nocturna.entity_id is defined -%}
+          {{ (var_amp_nocturna.entity_id[0] if var_amp_nocturna.entity_id is list else var_amp_nocturna.entity_id) | trim }}
         {%- elif var_amp_nocturna is string and var_amp_nocturna != '{}' and var_amp_nocturna != 'none' and var_amp_nocturna != '' -%}
           {{ var_amp_nocturna | trim }}
         {%- else -%}
           
         {%- endif -%}
       amp_delay_ent: >-
-        {%- if var_amp_delay_s is mapping and 'entity_id' in var_amp_delay_s -%}
-          {{ var_amp_delay_s.entity_id[0] if var_amp_delay_s.entity_id is list else var_amp_delay_s.entity_id }}
+        {%- if var_amp_delay_s is defined and var_amp_delay_s.entity_id is defined -%}
+          {{ (var_amp_delay_s.entity_id[0] if var_amp_delay_s.entity_id is list else var_amp_delay_s.entity_id) | trim }}
         {%- elif var_amp_delay_s is string and var_amp_delay_s != '{}' and var_amp_delay_s != 'none' and var_amp_delay_s != '' -%}
           {{ var_amp_delay_s | trim }}
         {%- else -%}
@@ -797,20 +797,16 @@ action:
                                   curr_wb_a: "{{ states(wb_num_ent) | float(0) }}"
                                   wb_last: "{{ states[wb_num_ent].last_changed if (wb_num_ent != '' and wb_num_ent in states) else none }}"
                                   wb_sec_since_change: "{{ (as_timestamp(now()) - as_timestamp(wb_last)) if (wb_last is not none) else 9999 }}"
-                                  is_overpower_emergency_wb: "{{ max_safe_amps < curr_wb_a }}"
-                                  target_wb: >-
-                                    {% if (wb_sec_since_change < amp_delay_sec) and (not is_overpower_emergency_wb) and (curr_wb_a >= 6) %}
-                                      {{ curr_wb_a }}
-                                    {% else %}
-                                      {{ raw_target_wb }}
-                                    {% endif %}
+                                  timer_expired_wb: "{{ wb_sec_since_change >= amp_delay_sec }}"
+                                  is_emergency_drop_wb: "{{ (max_safe_amps < curr_wb_a) and (raw_target_wb < curr_wb_a) }}"
+                                  allow_update_wb: "{{ timer_expired_wb or is_emergency_drop_wb }}"
                                   safe_wb_amps: >-
                                     {% set m_attr = state_attr(wb_num_ent, 'max') %}
                                     {% set m_lim = (m_attr | float(32)) if (m_attr is not none) else 32 %}
-                                    {{ [ (target_wb | float(6)), m_lim ] | min | int }}
+                                    {{ [ (raw_target_wb | float(6)), m_lim ] | min | int }}
                               - if:
                                   - condition: template
-                                    value_template: "{{ (states(wb_num_ent) | float(0)) != (safe_wb_amps | float(0)) }}"
+                                    value_template: "{{ allow_update_wb and ((states(wb_num_ent) | float(0)) != (safe_wb_amps | float(0))) }}"
                                 then:
                                   - service: number.set_value
                                     target: !input wallbox_current_number
@@ -828,17 +824,13 @@ action:
                                   curr_c1_a: "{{ states(c1_num_ent) | float(0) }}"
                                   c1_last: "{{ states[c1_num_ent].last_changed if (c1_num_ent != '' and c1_num_ent in states) else none }}"
                                   c1_sec_since_change: "{{ (as_timestamp(now()) - as_timestamp(c1_last)) if (c1_last is not none) else 9999 }}"
-                                  is_overpower_emergency_c1: "{{ max_safe_amps < curr_c1_a }}"
-                                  target_c1: >-
-                                    {% if (c1_sec_since_change < amp_delay_sec) and (not is_overpower_emergency_c1) and (curr_c1_a >= 6) %}
-                                      {{ curr_c1_a }}
-                                    {% else %}
-                                      {{ raw_target_c1 }}
-                                    {% endif %}
-                                  safe_c1_amps: "{{ [ (target_c1 | float(6)), 32 ] | min | int }}"
+                                  timer_expired_c1: "{{ c1_sec_since_change >= amp_delay_sec }}"
+                                  is_emergency_drop_c1: "{{ (max_safe_amps < curr_c1_a) and (raw_target_c1 < curr_c1_a) }}"
+                                  allow_update_c1: "{{ timer_expired_c1 or is_emergency_drop_c1 }}"
+                                  safe_c1_amps: "{{ [ (raw_target_c1 | float(6)), 32 ] | min | int }}"
                               - if:
                                   - condition: template
-                                    value_template: "{{ (states(c1_num_ent) | float(0)) != (safe_c1_amps | float(0)) }}"
+                                    value_template: "{{ allow_update_c1 and ((states(c1_num_ent) | float(0)) != (safe_c1_amps | float(0))) }}"
                                 then:
                                   - service: number.set_value
                                     target: !input car_1_current_number
@@ -856,17 +848,13 @@ action:
                                   curr_c2_a: "{{ states(c2_num_ent) | float(0) }}"
                                   c2_last: "{{ states[c2_num_ent].last_changed if (c2_num_ent != '' and c2_num_ent in states) else none }}"
                                   c2_sec_since_change: "{{ (as_timestamp(now()) - as_timestamp(c2_last)) if (c2_last is not none) else 9999 }}"
-                                  is_overpower_emergency_c2: "{{ max_safe_amps < curr_c2_a }}"
-                                  target_c2: >-
-                                    {% if (c2_sec_since_change < amp_delay_sec) and (not is_overpower_emergency_c2) and (curr_c2_a >= 6) %}
-                                      {{ curr_c2_a }}
-                                    {% else %}
-                                      {{ raw_target_c2 }}
-                                    {% endif %}
-                                  safe_c2_amps: "{{ [ (target_c2 | float(6)), 32 ] | min | int }}"
+                                  timer_expired_c2: "{{ c2_sec_since_change >= amp_delay_sec }}"
+                                  is_emergency_drop_c2: "{{ (max_safe_amps < curr_c2_a) and (raw_target_c2 < curr_c2_a) }}"
+                                  allow_update_c2: "{{ timer_expired_c2 or is_emergency_drop_c2 }}"
+                                  safe_c2_amps: "{{ [ (raw_target_c2 | float(6)), 32 ] | min | int }}"
                               - if:
                                   - condition: template
-                                    value_template: "{{ (states(c2_num_ent) | float(0)) != (safe_c2_amps | float(0)) }}"
+                                    value_template: "{{ allow_update_c2 and ((states(c2_num_ent) | float(0)) != (safe_c2_amps | float(0))) }}"
                                 then:
                                   - service: number.set_value
                                     target: !input car_2_current_number
