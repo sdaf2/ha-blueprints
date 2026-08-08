@@ -300,6 +300,10 @@ trigger:
   - platform: state
     entity_id: !input amperios_manual_input
   - platform: state
+    entity_id: input_number.evsmartampere
+  - platform: state
+    entity_id: input_number.amperios_carga_manual
+  - platform: state
     entity_id: !input amperios_nocturna_input
   - platform: state
     entity_id: !input net_power_sensor
@@ -427,28 +431,38 @@ action:
           
         {%- endif -%}
       amp_manual_ent: >-
-        {%- if var_amp_manual is defined and var_amp_manual.entity_id is defined -%}
-          {{ (var_amp_manual.entity_id[0] if var_amp_manual.entity_id is list else var_amp_manual.entity_id) | trim }}
-        {%- elif var_amp_manual is string and var_amp_manual != '{}' and var_amp_manual != 'none' and var_amp_manual != '' -%}
-          {{ var_amp_manual | trim }}
+        {%- set raw_m = var_amp_manual.entity_id[0] if (var_amp_manual is defined and var_amp_manual.entity_id is defined and var_amp_manual.entity_id is list) else (var_amp_manual.entity_id if (var_amp_manual is defined and var_amp_manual.entity_id is defined) else var_amp_manual) -%}
+        {%- set str_m = raw_m | string | trim -%}
+        {%- if str_m != '' and str_m != '{}' and str_m != 'none' and states(str_m) not in ['unknown', 'unavailable', 'none'] -%}
+          {{ str_m }}
+        {%- elif states('input_number.evsmartampere') not in ['unknown', 'unavailable', 'none'] -%}
+          input_number.evsmartampere
+        {%- elif states('input_number.amperios_carga_manual') not in ['unknown', 'unavailable', 'none'] -%}
+          input_number.amperios_carga_manual
         {%- else -%}
-          
+          input_number.evsmartampere
         {%- endif -%}
       amp_noct_ent: >-
-        {%- if var_amp_nocturna is defined and var_amp_nocturna.entity_id is defined -%}
-          {{ (var_amp_nocturna.entity_id[0] if var_amp_nocturna.entity_id is list else var_amp_nocturna.entity_id) | trim }}
-        {%- elif var_amp_nocturna is string and var_amp_nocturna != '{}' and var_amp_nocturna != 'none' and var_amp_nocturna != '' -%}
-          {{ var_amp_nocturna | trim }}
+        {%- set raw_n = var_amp_nocturna.entity_id[0] if (var_amp_nocturna is defined and var_amp_nocturna.entity_id is defined and var_amp_nocturna.entity_id is list) else (var_amp_nocturna.entity_id if (var_amp_nocturna is defined and var_amp_nocturna.entity_id is defined) else var_amp_nocturna) -%}
+        {%- set str_n = raw_n | string | trim -%}
+        {%- if str_n != '' and str_n != '{}' and str_n != 'none' and states(str_n) not in ['unknown', 'unavailable', 'none'] -%}
+          {{ str_n }}
+        {%- elif states('input_number.amperios_carga_nocturna') not in ['unknown', 'unavailable', 'none'] -%}
+          input_number.amperios_carga_nocturna
         {%- else -%}
-          
+          input_number.amperios_carga_nocturna
         {%- endif -%}
       amp_delay_ent: >-
-        {%- if var_amp_delay_s is defined and var_amp_delay_s.entity_id is defined -%}
-          {{ (var_amp_delay_s.entity_id[0] if var_amp_delay_s.entity_id is list else var_amp_delay_s.entity_id) | trim }}
-        {%- elif var_amp_delay_s is string and var_amp_delay_s != '{}' and var_amp_delay_s != 'none' and var_amp_delay_s != '' -%}
-          {{ var_amp_delay_s | trim }}
+        {%- set raw_d = var_amp_delay_s.entity_id[0] if (var_amp_delay_s is defined and var_amp_delay_s.entity_id is defined and var_amp_delay_s.entity_id is list) else (var_amp_delay_s.entity_id if (var_amp_delay_s is defined and var_amp_delay_s.entity_id is defined) else var_amp_delay_s) -%}
+        {%- set str_d = raw_d | string | trim -%}
+        {%- if str_d != '' and str_d != '{}' and str_d != 'none' and states(str_d) not in ['unknown', 'unavailable', 'none'] -%}
+          {{ str_d }}
+        {%- elif states('input_number.evsmarttimeampere') not in ['unknown', 'unavailable', 'none'] -%}
+          input_number.evsmarttimeampere
+        {%- elif states('input_number.ev_amp_change_delay_sec') not in ['unknown', 'unavailable', 'none'] -%}
+          input_number.ev_amp_change_delay_sec
         {%- else -%}
-          
+          input_number.evsmarttimeampere
         {%- endif -%}
 
   # =================================================================
@@ -563,8 +577,11 @@ action:
                     value_template: "{{ effective_modo == 'Manual' }}"
                 sequence:
                   - variables:
-                      req_manual_amps: "{{ (states(amp_manual_ent) | float(16)) | int(16) }}"
-                      desired_amps: "{{ [ [req_manual_amps, 6] | max, 32 ] | min | int }}"
+                      req_manual_amps: >-
+                        {%- set v_man = states(amp_manual_ent) | float(0) -%}
+                        {%- set v_alt = states('input_number.evsmartampere') | float(0) -%}
+                        {{ v_man if v_man >= 6 else (v_alt if v_alt >= 6 else 16) }}
+                      desired_amps: "{{ [ [req_manual_amps | int, 6] | max, 32 ] | min | int }}"
                       safe_wb_manual: "{{ [ [desired_amps | int, 6] | max, 32 ] | min | int }}"
                       safe_c1_manual: "{{ [ [desired_amps | int, 6] | max, 32 ] | min | int }}"
 
