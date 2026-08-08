@@ -377,22 +377,18 @@ action:
       c1_sw_ent: >-
         {%- set raw_sw = var_c1_sw.entity_id[0] if (var_c1_sw is defined and var_c1_sw.entity_id is defined and var_c1_sw.entity_id is list) else (var_c1_sw.entity_id if (var_c1_sw is defined and var_c1_sw.entity_id is defined) else var_c1_sw) -%}
         {%- set str_sw = raw_sw | string | trim -%}
-        {%- if str_sw != '' and str_sw != '{}' and str_sw != 'none' and states(str_sw) not in ['unknown', 'unavailable', 'none'] -%}
+        {%- if str_sw != '' and str_sw != '{}' and str_sw != 'none' and str_sw != 'null' -%}
           {{ str_sw }}
-        {%- elif states('switch.garaje_nafnaf_carga') not in ['unknown', 'unavailable', 'none'] -%}
-          switch.garaje_nafnaf_carga
         {%- else -%}
-          {{ str_sw if str_sw != '{}' and str_sw != 'none' else '' }}
+          switch.garaje_nafnaf_carga
         {%- endif -%}
       c1_num_ent: >-
         {%- set raw_c1 = var_c1_num.entity_id[0] if (var_c1_num is defined and var_c1_num.entity_id is defined and var_c1_num.entity_id is list) else (var_c1_num.entity_id if (var_c1_num is defined and var_c1_num.entity_id is defined) else var_c1_num) -%}
         {%- set str_c1 = raw_c1 | string | trim -%}
-        {%- if str_c1 != '' and str_c1 != '{}' and str_c1 != 'none' and states(str_c1) not in ['unknown', 'unavailable', 'none'] -%}
+        {%- if str_c1 != '' and str_c1 != '{}' and str_c1 != 'none' and str_c1 != 'null' -%}
           {{ str_c1 }}
-        {%- elif states('number.garaje_nafnaf_corriente_de_carga') not in ['unknown', 'unavailable', 'none'] -%}
-          number.garaje_nafnaf_corriente_de_carga
         {%- else -%}
-          {{ str_c1 if str_c1 != '{}' and str_c1 != 'none' else '' }}
+          number.garaje_nafnaf_corriente_de_carga
         {%- endif -%}
       c2_sw_ent: >-
         {%- set raw_sw2 = var_c2_sw.entity_id[0] if (var_c2_sw is defined and var_c2_sw.entity_id is defined and var_c2_sw.entity_id is list) else (var_c2_sw.entity_id if (var_c2_sw is defined and var_c2_sw.entity_id is defined) else var_c2_sw) -%}
@@ -405,64 +401,48 @@ action:
       wb_sw_ent: >-
         {%- set raw_wbs = var_wb_sw.entity_id[0] if (var_wb_sw is defined and var_wb_sw.entity_id is defined and var_wb_sw.entity_id is list) else (var_wb_sw.entity_id if (var_wb_sw is defined and var_wb_sw.entity_id is defined) else var_wb_sw) -%}
         {%- set str_wbs = raw_wbs | string | trim -%}
-        {%- if str_wbs != '' and str_wbs != '{}' and str_wbs != 'none' and states(str_wbs) not in ['unknown', 'unavailable', 'none'] -%}
+        {%- if str_wbs != '' and str_wbs != '{}' and str_wbs != 'none' and str_wbs != 'null' -%}
           {{ str_wbs }}
-        {%- elif states('switch.raedian_availability') not in ['unknown', 'unavailable', 'none'] -%}
-          switch.raedian_availability
         {%- else -%}
-          {{ str_wbs if str_wbs != '{}' and str_wbs != 'none' else '' }}
+          switch.raedian_availability
         {%- endif -%}
       wb_cc_ent: >-
         {%- set raw_wbcc = var_wb_cc.entity_id[0] if (var_wb_cc is defined and var_wb_cc.entity_id is defined and var_wb_cc.entity_id is list) else (var_wb_cc.entity_id if (var_wb_cc is defined and var_wb_cc.entity_id is defined) else var_wb_cc) -%}
         {%- set str_wbcc = raw_wbcc | string | trim -%}
-        {%- if str_wbcc != '' and str_wbcc != '{}' and str_wbcc != 'none' and states(str_wbcc) not in ['unknown', 'unavailable', 'none'] -%}
+        {%- if str_wbcc != '' and str_wbcc != '{}' and str_wbcc != 'none' and str_wbcc != 'null' -%}
           {{ str_wbcc }}
-        {%- elif states('switch.raedian_charge_control') not in ['unknown', 'unavailable', 'none'] -%}
-          switch.raedian_charge_control
         {%- else -%}
-          {{ str_wbcc if str_wbcc != '{}' and str_wbcc != 'none' else '' }}
+          switch.raedian_charge_control
         {%- endif -%}
       wb_num_ent: >-
         {%- set raw_wbn = var_wb_num.entity_id[0] if (var_wb_num is defined and var_wb_num.entity_id is defined and var_wb_num.entity_id is list) else (var_wb_num.entity_id if (var_wb_num is defined and var_wb_num.entity_id is defined) else var_wb_num) -%}
         {%- set str_wbn = raw_wbn | string | trim -%}
-        {%- if str_wbn != '' and str_wbn != '{}' and str_wbn != 'none' and states(str_wbn) not in ['unknown', 'unavailable', 'none'] -%}
+        {%- if str_wbn != '' and str_wbn != '{}' and str_wbn != 'none' and str_wbn != 'null' -%}
           {{ str_wbn }}
-        {%- elif states('number.raedian_maximum_current') not in ['unknown', 'unavailable', 'none'] -%}
-          number.raedian_maximum_current
         {%- else -%}
-          {{ str_wbn if str_wbn != '{}' and str_wbn != 'none' else '' }}
+          number.raedian_maximum_current
         {%- endif -%}
       amp_manual_ent: >-
         {%- set raw_m = var_amp_manual.entity_id[0] if (var_amp_manual is defined and var_amp_manual.entity_id is defined and var_amp_manual.entity_id is list) else (var_amp_manual.entity_id if (var_amp_manual is defined and var_amp_manual.entity_id is defined) else var_amp_manual) -%}
         {%- set str_m = raw_m | string | trim -%}
-        {%- if str_m != '' and str_m != '{}' and str_m != 'none' and states(str_m) not in ['unknown', 'unavailable', 'none'] -%}
+        {%- if str_m != '' and str_m != '{}' and str_m != 'none' and str_m != 'null' -%}
           {{ str_m }}
-        {%- elif states('input_number.evsmartampere') not in ['unknown', 'unavailable', 'none'] -%}
-          input_number.evsmartampere
-        {%- elif states('input_number.amperios_carga_manual') not in ['unknown', 'unavailable', 'none'] -%}
-          input_number.amperios_carga_manual
         {%- else -%}
           input_number.evsmartampere
         {%- endif -%}
       amp_noct_ent: >-
         {%- set raw_n = var_amp_nocturna.entity_id[0] if (var_amp_nocturna is defined and var_amp_nocturna.entity_id is defined and var_amp_nocturna.entity_id is list) else (var_amp_nocturna.entity_id if (var_amp_nocturna is defined and var_amp_nocturna.entity_id is defined) else var_amp_nocturna) -%}
         {%- set str_n = raw_n | string | trim -%}
-        {%- if str_n != '' and str_n != '{}' and str_n != 'none' and states(str_n) not in ['unknown', 'unavailable', 'none'] -%}
+        {%- if str_n != '' and str_n != '{}' and str_n != 'none' and str_n != 'null' -%}
           {{ str_n }}
-        {%- elif states('input_number.amperios_carga_nocturna') not in ['unknown', 'unavailable', 'none'] -%}
-          input_number.amperios_carga_nocturna
         {%- else -%}
-          input_number.amperios_carga_nocturna
+          input_number.evsmartampere
         {%- endif -%}
       amp_delay_ent: >-
         {%- set raw_d = var_amp_delay_s.entity_id[0] if (var_amp_delay_s is defined and var_amp_delay_s.entity_id is defined and var_amp_delay_s.entity_id is list) else (var_amp_delay_s.entity_id if (var_amp_delay_s is defined and var_amp_delay_s.entity_id is defined) else var_amp_delay_s) -%}
         {%- set str_d = raw_d | string | trim -%}
-        {%- if str_d != '' and str_d != '{}' and str_d != 'none' and states(str_d) not in ['unknown', 'unavailable', 'none'] -%}
+        {%- if str_d != '' and str_d != '{}' and str_d != 'none' and str_d != 'null' -%}
           {{ str_d }}
-        {%- elif states('input_number.evsmarttimeampere') not in ['unknown', 'unavailable', 'none'] -%}
-          input_number.evsmarttimeampere
-        {%- elif states('input_number.ev_amp_change_delay_sec') not in ['unknown', 'unavailable', 'none'] -%}
-          input_number.ev_amp_change_delay_sec
         {%- else -%}
           input_number.evsmarttimeampere
         {%- endif -%}
@@ -617,7 +597,7 @@ action:
                   # PASO 4: Wallbox Amperios
                   - if:
                       - condition: template
-                        value_template: "{{ wb_num_ent != '' and (states(wb_num_ent) | float(0)) != (safe_wb_manual | float(0)) }}"
+                        value_template: "{{ wb_num_ent != '' }}"
                     then:
                       - service: number.set_value
                         target:
@@ -629,7 +609,7 @@ action:
                   # PASO 5: Tesla Amperios (solo si está configurado)
                   - if:
                       - condition: template
-                        value_template: "{{ c1_num_ent != '' and (states(c1_num_ent) | float(0)) != (safe_c1_manual | float(0)) }}"
+                        value_template: "{{ c1_num_ent != '' }}"
                     then:
                       - service: number.set_value
                         target:
