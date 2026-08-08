@@ -375,60 +375,62 @@ action:
         {% endif %}
 
       c1_sw_ent: >-
-        {%- if var_c1_sw is defined and var_c1_sw.entity_id is defined -%}
-          {{ (var_c1_sw.entity_id[0] if var_c1_sw.entity_id is list else var_c1_sw.entity_id) | trim }}
-        {%- elif var_c1_sw is string and var_c1_sw != '{}' and var_c1_sw != 'none' -%}
-          {{ var_c1_sw | trim }}
+        {%- set raw_sw = var_c1_sw.entity_id[0] if (var_c1_sw is defined and var_c1_sw.entity_id is defined and var_c1_sw.entity_id is list) else (var_c1_sw.entity_id if (var_c1_sw is defined and var_c1_sw.entity_id is defined) else var_c1_sw) -%}
+        {%- set str_sw = raw_sw | string | trim -%}
+        {%- if str_sw != '' and str_sw != '{}' and str_sw != 'none' and states(str_sw) not in ['unknown', 'unavailable', 'none'] -%}
+          {{ str_sw }}
+        {%- elif states('switch.garaje_nafnaf_carga') not in ['unknown', 'unavailable', 'none'] -%}
+          switch.garaje_nafnaf_carga
         {%- else -%}
-          
+          {{ str_sw if str_sw != '{}' and str_sw != 'none' else '' }}
         {%- endif -%}
       c1_num_ent: >-
-        {%- if var_c1_num is defined and var_c1_num.entity_id is defined -%}
-          {{ (var_c1_num.entity_id[0] if var_c1_num.entity_id is list else var_c1_num.entity_id) | trim }}
-        {%- elif var_c1_num is string and var_c1_num != '{}' and var_c1_num != 'none' -%}
-          {{ var_c1_num | trim }}
+        {%- set raw_c1 = var_c1_num.entity_id[0] if (var_c1_num is defined and var_c1_num.entity_id is defined and var_c1_num.entity_id is list) else (var_c1_num.entity_id if (var_c1_num is defined and var_c1_num.entity_id is defined) else var_c1_num) -%}
+        {%- set str_c1 = raw_c1 | string | trim -%}
+        {%- if str_c1 != '' and str_c1 != '{}' and str_c1 != 'none' and states(str_c1) not in ['unknown', 'unavailable', 'none'] -%}
+          {{ str_c1 }}
+        {%- elif states('number.garaje_nafnaf_corriente_de_carga') not in ['unknown', 'unavailable', 'none'] -%}
+          number.garaje_nafnaf_corriente_de_carga
         {%- else -%}
-          
+          {{ str_c1 if str_c1 != '{}' and str_c1 != 'none' else '' }}
         {%- endif -%}
       c2_sw_ent: >-
-        {%- if var_c2_sw is defined and var_c2_sw.entity_id is defined -%}
-          {{ (var_c2_sw.entity_id[0] if var_c2_sw.entity_id is list else var_c2_sw.entity_id) | trim }}
-        {%- elif var_c2_sw is string and var_c2_sw != '{}' and var_c2_sw != 'none' -%}
-          {{ var_c2_sw | trim }}
-        {%- else -%}
-          
-        {%- endif -%}
+        {%- set raw_sw2 = var_c2_sw.entity_id[0] if (var_c2_sw is defined and var_c2_sw.entity_id is defined and var_c2_sw.entity_id is list) else (var_c2_sw.entity_id if (var_c2_sw is defined and var_c2_sw.entity_id is defined) else var_c2_sw) -%}
+        {%- set str_sw2 = raw_sw2 | string | trim -%}
+        {{ str_sw2 if str_sw2 != '{}' and str_sw2 != 'none' else '' }}
       c2_num_ent: >-
-        {%- if var_c2_num is defined and var_c2_num.entity_id is defined -%}
-          {{ (var_c2_num.entity_id[0] if var_c2_num.entity_id is list else var_c2_num.entity_id) | trim }}
-        {%- elif var_c2_num is string and var_c2_num != '{}' and var_c2_num != 'none' -%}
-          {{ var_c2_num | trim }}
-        {%- else -%}
-          
-        {%- endif -%}
+        {%- set raw_c2 = var_c2_num.entity_id[0] if (var_c2_num is defined and var_c2_num.entity_id is defined and var_c2_num.entity_id is list) else (var_c2_num.entity_id if (var_c2_num is defined and var_c2_num.entity_id is defined) else var_c2_num) -%}
+        {%- set str_c2 = raw_c2 | string | trim -%}
+        {{ str_c2 if str_c2 != '{}' and str_c2 != 'none' else '' }}
       wb_sw_ent: >-
-        {%- if var_wb_sw is defined and var_wb_sw.entity_id is defined -%}
-          {{ (var_wb_sw.entity_id[0] if var_wb_sw.entity_id is list else var_wb_sw.entity_id) | trim }}
-        {%- elif var_wb_sw is string and var_wb_sw != '{}' and var_wb_sw != 'none' -%}
-          {{ var_wb_sw | trim }}
+        {%- set raw_wbs = var_wb_sw.entity_id[0] if (var_wb_sw is defined and var_wb_sw.entity_id is defined and var_wb_sw.entity_id is list) else (var_wb_sw.entity_id if (var_wb_sw is defined and var_wb_sw.entity_id is defined) else var_wb_sw) -%}
+        {%- set str_wbs = raw_wbs | string | trim -%}
+        {%- if str_wbs != '' and str_wbs != '{}' and str_wbs != 'none' and states(str_wbs) not in ['unknown', 'unavailable', 'none'] -%}
+          {{ str_wbs }}
+        {%- elif states('switch.raedian_availability') not in ['unknown', 'unavailable', 'none'] -%}
+          switch.raedian_availability
         {%- else -%}
-          
+          {{ str_wbs if str_wbs != '{}' and str_wbs != 'none' else '' }}
         {%- endif -%}
       wb_cc_ent: >-
-        {%- if var_wb_cc is defined and var_wb_cc.entity_id is defined -%}
-          {{ (var_wb_cc.entity_id[0] if var_wb_cc.entity_id is list else var_wb_cc.entity_id) | trim }}
-        {%- elif var_wb_cc is string and var_wb_cc != '{}' and var_wb_cc != 'none' -%}
-          {{ var_wb_cc | trim }}
+        {%- set raw_wbcc = var_wb_cc.entity_id[0] if (var_wb_cc is defined and var_wb_cc.entity_id is defined and var_wb_cc.entity_id is list) else (var_wb_cc.entity_id if (var_wb_cc is defined and var_wb_cc.entity_id is defined) else var_wb_cc) -%}
+        {%- set str_wbcc = raw_wbcc | string | trim -%}
+        {%- if str_wbcc != '' and str_wbcc != '{}' and str_wbcc != 'none' and states(str_wbcc) not in ['unknown', 'unavailable', 'none'] -%}
+          {{ str_wbcc }}
+        {%- elif states('switch.raedian_charge_control') not in ['unknown', 'unavailable', 'none'] -%}
+          switch.raedian_charge_control
         {%- else -%}
-          
+          {{ str_wbcc if str_wbcc != '{}' and str_wbcc != 'none' else '' }}
         {%- endif -%}
       wb_num_ent: >-
-        {%- if var_wb_num is defined and var_wb_num.entity_id is defined -%}
-          {{ (var_wb_num.entity_id[0] if var_wb_num.entity_id is list else var_wb_num.entity_id) | trim }}
-        {%- elif var_wb_num is string and var_wb_num != '{}' and var_wb_num != 'none' -%}
-          {{ var_wb_num | trim }}
+        {%- set raw_wbn = var_wb_num.entity_id[0] if (var_wb_num is defined and var_wb_num.entity_id is defined and var_wb_num.entity_id is list) else (var_wb_num.entity_id if (var_wb_num is defined and var_wb_num.entity_id is defined) else var_wb_num) -%}
+        {%- set str_wbn = raw_wbn | string | trim -%}
+        {%- if str_wbn != '' and str_wbn != '{}' and str_wbn != 'none' and states(str_wbn) not in ['unknown', 'unavailable', 'none'] -%}
+          {{ str_wbn }}
+        {%- elif states('number.raedian_maximum_current') not in ['unknown', 'unavailable', 'none'] -%}
+          number.raedian_maximum_current
         {%- else -%}
-          
+          {{ str_wbn if str_wbn != '{}' and str_wbn != 'none' else '' }}
         {%- endif -%}
       amp_manual_ent: >-
         {%- set raw_m = var_amp_manual.entity_id[0] if (var_amp_manual is defined and var_amp_manual.entity_id is defined and var_amp_manual.entity_id is list) else (var_amp_manual.entity_id if (var_amp_manual is defined and var_amp_manual.entity_id is defined) else var_amp_manual) -%}
@@ -618,7 +620,8 @@ action:
                         value_template: "{{ wb_num_ent != '' and (states(wb_num_ent) | float(0)) != (safe_wb_manual | float(0)) }}"
                     then:
                       - service: number.set_value
-                        target: !input wallbox_current_number
+                        target:
+                          entity_id: "{{ wb_num_ent }}"
                         data:
                           value: "{{ safe_wb_manual | int }}"
                         continue_on_error: true
@@ -629,7 +632,8 @@ action:
                         value_template: "{{ c1_num_ent != '' and (states(c1_num_ent) | float(0)) != (safe_c1_manual | float(0)) }}"
                     then:
                       - service: number.set_value
-                        target: !input car_1_current_number
+                        target:
+                          entity_id: "{{ c1_num_ent }}"
                         data:
                           value: "{{ safe_c1_manual | int }}"
                         continue_on_error: true
