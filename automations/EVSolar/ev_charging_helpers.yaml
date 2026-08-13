@@ -116,6 +116,24 @@ input_datetime:
     has_time: true
     initial: "08:00:00"
 
+  # Registro interno de "cuándo actué yo por última vez" por cargador, para el
+  # temporizador de estabilización de amperaje. No depende de que el dispositivo
+  # externo (OCPP/Tesla) confirme o refleje el cambio en su propio last_changed.
+  ev_wb_last_amp_change:
+    name: "Última Actuación de Amperaje - Wallbox"
+    has_date: true
+    has_time: true
+
+  ev_c1_last_amp_change:
+    name: "Última Actuación de Amperaje - Coche 1"
+    has_date: true
+    has_time: true
+
+  ev_c2_last_amp_change:
+    name: "Última Actuación de Amperaje - Coche 2"
+    has_date: true
+    has_time: true
+
 input_boolean:
   ev_prioridad_bloqueada:
     name: "Bloqueo por Cargas Prioritarias (Termo / Aerotermia)"
