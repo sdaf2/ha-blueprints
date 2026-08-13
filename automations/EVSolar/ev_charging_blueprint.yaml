@@ -454,6 +454,10 @@ action:
       max_safe_amps_house: "{{ (available_house_margin_w / 230) | int(0) }}"
       max_safe_amps_grid: "{{ (available_grid_margin_w / 230) | int(0) }}"
       max_safe_amps: "{{ max_safe_amps_house if has_energy_support else [ max_safe_amps_house, max_safe_amps_grid ] | min }}"
+      # Margen de histéresis para el salto de emergencia (bypass del temporizador de
+      # estabilización): evita que el ruido normal de las lecturas de potencia (1-2A)
+      # dispare correcciones inmediatas; solo una caída real de potencia lo activa.
+      emergency_margin_a: 2
 
       has_priority_block: "{{ var_prio_block is string and var_prio_block != '' and var_prio_block != 'none' and is_state(var_prio_block, 'on') }}"
 
@@ -746,10 +750,10 @@ action:
                               - variables:
                                   raw_target_wb: "{{ [calculated_amps, 6] | max }}"
                                   curr_wb_a: "{{ states(ent.wb_num) | float(0) }}"
-                                  wb_last: "{{ states[ent.wb_num].last_changed if (ent.wb_num != '' and ent.wb_num in states) else none }}"
-                                  wb_sec_since_change: "{{ (as_timestamp(now()) - as_timestamp(wb_last)) if (wb_last is not none) else 9999 }}"
+                                  wb_last: "{{ states('input_datetime.ev_wb_last_amp_change') }}"
+                                  wb_sec_since_change: "{{ (as_timestamp(now()) - as_timestamp(wb_last)) if (wb_last not in ['unknown', 'unavailable', 'none', '', none]) else 9999 }}"
                                   timer_expired_wb: "{{ wb_sec_since_change >= amp_delay_sec }}"
-                                  is_emergency_drop_wb: "{{ (max_safe_amps < curr_wb_a) and (raw_target_wb < curr_wb_a) }}"
+                                  is_emergency_drop_wb: "{{ (max_safe_amps < (curr_wb_a - emergency_margin_a)) and (raw_target_wb < curr_wb_a) }}"
                                   allow_update_wb: "{{ timer_expired_wb or is_emergency_drop_wb }}"
                                   safe_wb_amps: >-
                                     {% set m_attr = state_attr(ent.wb_num, 'max') %}
@@ -764,6 +768,12 @@ action:
                                     data:
                                       value: "{{ safe_wb_amps }}"
                                     continue_on_error: true
+                                  - service: input_datetime.set_datetime
+                                    target:
+                                      entity_id: input_datetime.ev_wb_last_amp_change
+                                    data:
+                                      timestamp: "{{ now().timestamp() }}"
+                                    continue_on_error: true
 
                           # 6. Ajustar Amperaje del Coche 1 (si tiene entidad de amperaje individual)
                           - if:
@@ -773,10 +783,10 @@ action:
                               - variables:
                                   raw_target_c1: "{{ [amps_c1 | float(6), 6] | max }}"
                                   curr_c1_a: "{{ states(ent.c1_num) | float(0) }}"
-                                  c1_last: "{{ states[ent.c1_num].last_changed if (ent.c1_num != '' and ent.c1_num in states) else none }}"
-                                  c1_sec_since_change: "{{ (as_timestamp(now()) - as_timestamp(c1_last)) if (c1_last is not none) else 9999 }}"
+                                  c1_last: "{{ states('input_datetime.ev_c1_last_amp_change') }}"
+                                  c1_sec_since_change: "{{ (as_timestamp(now()) - as_timestamp(c1_last)) if (c1_last not in ['unknown', 'unavailable', 'none', '', none]) else 9999 }}"
                                   timer_expired_c1: "{{ c1_sec_since_change >= amp_delay_sec }}"
-                                  is_emergency_drop_c1: "{{ (max_safe_amps < curr_c1_a) and (raw_target_c1 < curr_c1_a) }}"
+                                  is_emergency_drop_c1: "{{ (max_safe_amps < (curr_c1_a - emergency_margin_a)) and (raw_target_c1 < curr_c1_a) }}"
                                   allow_update_c1: "{{ timer_expired_c1 or is_emergency_drop_c1 }}"
                                   safe_c1_amps: "{{ [ (raw_target_c1 | float(6)), 32 ] | min | int }}"
                               - if:
@@ -788,6 +798,12 @@ action:
                                     data:
                                       value: "{{ safe_c1_amps }}"
                                     continue_on_error: true
+                                  - service: input_datetime.set_datetime
+                                    target:
+                                      entity_id: input_datetime.ev_c1_last_amp_change
+                                    data:
+                                      timestamp: "{{ now().timestamp() }}"
+                                    continue_on_error: true
 
                           # 7. Ajustar Amperaje del Coche 2 (si tiene entidad de amperaje individual)
                           - if:
@@ -797,10 +813,10 @@ action:
                               - variables:
                                   raw_target_c2: "{{ [amps_c2 | float(6), 6] | max }}"
                                   curr_c2_a: "{{ states(ent.c2_num) | float(0) }}"
-                                  c2_last: "{{ states[ent.c2_num].last_changed if (ent.c2_num != '' and ent.c2_num in states) else none }}"
-                                  c2_sec_since_change: "{{ (as_timestamp(now()) - as_timestamp(c2_last)) if (c2_last is not none) else 9999 }}"
+                                  c2_last: "{{ states('input_datetime.ev_c2_last_amp_change') }}"
+                                  c2_sec_since_change: "{{ (as_timestamp(now()) - as_timestamp(c2_last)) if (c2_last not in ['unknown', 'unavailable', 'none', '', none]) else 9999 }}"
                                   timer_expired_c2: "{{ c2_sec_since_change >= amp_delay_sec }}"
-                                  is_emergency_drop_c2: "{{ (max_safe_amps < curr_c2_a) and (raw_target_c2 < curr_c2_a) }}"
+                                  is_emergency_drop_c2: "{{ (max_safe_amps < (curr_c2_a - emergency_margin_a)) and (raw_target_c2 < curr_c2_a) }}"
                                   allow_update_c2: "{{ timer_expired_c2 or is_emergency_drop_c2 }}"
                                   safe_c2_amps: "{{ [ (raw_target_c2 | float(6)), 32 ] | min | int }}"
                               - if:
@@ -811,6 +827,12 @@ action:
                                     target: !input car_2_current_number
                                     data:
                                       value: "{{ safe_c2_amps }}"
+                                    continue_on_error: true
+                                  - service: input_datetime.set_datetime
+                                    target:
+                                      entity_id: input_datetime.ev_c2_last_amp_change
+                                    data:
+                                      timestamp: "{{ now().timestamp() }}"
                                     continue_on_error: true
 
                       # --- NO HAY SOL / BLOQUEO PRIORITARIO (PAUSA / APAGADO SOLAR) ---
