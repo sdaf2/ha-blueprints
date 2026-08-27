@@ -907,11 +907,14 @@ action:
                           wb_charge_sec: "{{ (now() - wb_last_chg).total_seconds() if (wb_last_chg is not none and is_state(ent.wb_sw, 'on')) else 9999 }}"
                           can_stop_c1: "{{ c1_charge_sec >= stop_delay_sec }}"
                           can_stop_wb: "{{ wb_charge_sec >= stop_delay_sec }}"
+                          should_stop_soc: "{{ current_soc <= min_soc_req }}"
+                          must_stop_wb: "{{ can_stop_wb or should_stop_soc }}"
+                          must_stop_c1: "{{ can_stop_c1 or should_stop_soc }}"
 
                       - choose:
                           - conditions:
                               - condition: template
-                                value_template: "{{ not can_stop_c1 or not can_stop_wb }}"
+                                value_template: "{{ not must_stop_c1 or not must_stop_wb }}"
                             sequence:
                               - if:
                                   - condition: template
@@ -931,6 +934,13 @@ action:
                                     continue_on_error: true
 
                         default:
+                          - if:
+                              - condition: template
+                                value_template: "{{ ent.wb_cc != '' and not is_state(ent.wb_cc, 'off') }}"
+                            then:
+                              - service: switch.turn_off
+                                target: !input wallbox_charge_control_switch
+                                continue_on_error: true
                           - if:
                               - condition: template
                                 value_template: "{{ ent.wb_sw != '' and not is_state(ent.wb_sw, 'off') }}"
