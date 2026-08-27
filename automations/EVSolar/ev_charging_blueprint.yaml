@@ -750,7 +750,7 @@ action:
                               - variables:
                                   raw_target_wb: "{{ [calculated_amps, 6] | max }}"
                                   curr_wb_a: "{{ states(ent.wb_num) | float(0) }}"
-                                  wb_ent_obj: "{{ states[ent.wb_num] if (ent.wb_num != '' and ent.wb_num in states) else none }}"
+                                  wb_ent_obj: "{{ states[ent.wb_num] if (ent.wb_num != '' and states(ent.wb_num) not in ['unknown', 'unavailable', 'none', '']) else none }}"
                                   wb_sec_since_change: "{{ (now() - wb_ent_obj.last_changed).total_seconds() if (wb_ent_obj is not none and wb_ent_obj.last_changed is defined) else 9999 }}"
                                   timer_expired_wb: "{{ wb_sec_since_change >= amp_delay_sec }}"
                                   is_emergency_drop_wb: "{{ (max_safe_amps < (curr_wb_a - emergency_margin_a)) and (raw_target_wb < curr_wb_a) }}"
@@ -777,7 +777,7 @@ action:
                               - variables:
                                   raw_target_c1: "{{ [amps_c1 | float(6), 6] | max }}"
                                   curr_c1_a: "{{ states(ent.c1_num) | float(0) }}"
-                                  c1_ent_obj: "{{ states[ent.c1_num] if (ent.c1_num != '' and ent.c1_num in states) else none }}"
+                                  c1_ent_obj: "{{ states[ent.c1_num] if (ent.c1_num != '' and states(ent.c1_num) not in ['unknown', 'unavailable', 'none', '']) else none }}"
                                   c1_sec_since_change: "{{ (now() - c1_ent_obj.last_changed).total_seconds() if (c1_ent_obj is not none and c1_ent_obj.last_changed is defined) else 9999 }}"
                                   timer_expired_c1: "{{ c1_sec_since_change >= amp_delay_sec }}"
                                   is_emergency_drop_c1: "{{ (max_safe_amps < (curr_c1_a - emergency_margin_a)) and (raw_target_c1 < curr_c1_a) }}"
@@ -801,7 +801,7 @@ action:
                               - variables:
                                   raw_target_c2: "{{ [amps_c2 | float(6), 6] | max }}"
                                   curr_c2_a: "{{ states(ent.c2_num) | float(0) }}"
-                                  c2_ent_obj: "{{ states[ent.c2_num] if (ent.c2_num != '' and ent.c2_num in states) else none }}"
+                                  c2_ent_obj: "{{ states[ent.c2_num] if (ent.c2_num != '' and states(ent.c2_num) not in ['unknown', 'unavailable', 'none', '']) else none }}"
                                   c2_sec_since_change: "{{ (now() - c2_ent_obj.last_changed).total_seconds() if (c2_ent_obj is not none and c2_ent_obj.last_changed is defined) else 9999 }}"
                                   timer_expired_c2: "{{ c2_sec_since_change >= amp_delay_sec }}"
                                   is_emergency_drop_c2: "{{ (max_safe_amps < (curr_c2_a - emergency_margin_a)) and (raw_target_c2 < curr_c2_a) }}"
